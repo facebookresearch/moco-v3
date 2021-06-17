@@ -390,8 +390,11 @@ class ProgressMeter(object):
 
 
 def adjust_learning_rate(optimizer, init_lr, epoch, args):
-    """Decays the learning rate with half-cycle cosine"""
-    lr = init_lr * 0.5 * (1. + math.cos(math.pi * epoch / args.epochs))
+    """Decays the learning rate with half-cycle cosine after warmup"""
+    if epoch < args.warmup_epochs:
+        lr = init_lr / args.warmup_epochs * epoch
+    else:
+        lr = init_lr * 0.5 * (1. + math.cos(math.pi * (epoch - warmup_epochs) / (args.epochs - args.warmup_epochs)))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
