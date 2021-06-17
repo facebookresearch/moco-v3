@@ -1,163 +1,99 @@
-# Copyright (c) Facebook, Inc. and its affiliates. All Rights Reserved
+# Copyright (c) Facebook, Inc. and its affiliates.
+# All rights reserved.
+
+# This source code is licensed under the license found in the
+# LICENSE file in the root directory of this source tree.
+
 import torch
 import torch.nn as nn
 
 
 class MoCo(nn.Module):
     """
-    Build a MoCo model with: a query encoder, a key encoder, and a queue
+    Build a MoCo model with: a base encoder, a momentum encoder
     https://arxiv.org/abs/1911.05722
     """
-    def __init__(self, base_encoder, dim=128, K=65536, m=0.999, T=0.07, mlp=False):
+    def __init__(self, base_encoder, dim=256, mlp_dim=4096, m=0.99, T=1.0):
         """
-        dim: feature dimension (default: 128)
-        K: queue size; number of negative keys (default: 65536)
-        m: moco momentum of updating key encoder (default: 0.999)
-        T: softmax temperature (default: 0.07)
+        dim: feature dimension (default: 256)
+        mlp_dim: hidden dimension in MLPs (default: 4096)
+        m: moco momentum of updating momentum encoder (default: 0.99)
+        T: softmax temperature (default: 1.0)
         """
         super(MoCo, self).__init__()
 
-        self.K = K
         self.m = m
         self.T = T
 
         # create the encoders
-        # num_classes is the output fc dimension
-        self.encoder_q = base_encoder(num_classes=dim)
-        self.encoder_k = base_encoder(num_classes=dim)
+        # num_classes is the hidden MLP dimension
+        self.base_encoder = base_encoder(num_classes=mlp_dim, zero_init_residual=True)
+        self.momentum_encoder = base_encoder(num_classes=mlp_dim, zero_init_residual=True)
 
-        if mlp:  # hack: brute-force replacement
-            dim_mlp = self.encoder_q.fc.weight.shape[1]
-            self.encoder_q.fc = nn.Sequential(nn.Linear(dim_mlp, dim_mlp), nn.ReLU(), self.encoder_q.fc)
-            self.encoder_k.fc = nn.Sequential(nn.Linear(dim_mlp, dim_mlp), nn.ReLU(), self.encoder_k.fc)
+        self.base_encoder.fc = nn.Sequential(self.base_encoder.fc,
+                                            nn.BatchNorm1d(mlp_dim),
+                                            nn.ReLU(inplace=True), # first layer
+                                            nn.Linear(mlp_dim, dim, bias=False)) # second layer
+        self.base_encoder.fc[0].bias.requires_grad = False # hack: not use bias as it is followed by BN
+        self.momentum_encoder.fc = nn.Sequential(self.momentum_encoder.fc,
+                                            nn.BatchNorm1d(mlp_dim),
+                                            nn.ReLU(inplace=True), # first layer
+                                            nn.Linear(mlp_dim, dim, bias=False)) # second layer
 
-        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
-            param_k.data.copy_(param_q.data)  # initialize
-            param_k.requires_grad = False  # not update by gradient
+        for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
+            param_m.data.copy_(param_b.data)  # initialize
+            param_m.requires_grad = False  # not update by gradient
 
-        # create the queue
-        self.register_buffer("queue", torch.randn(dim, K))
-        self.queue = nn.functional.normalize(self.queue, dim=0)
-
-        self.register_buffer("queue_ptr", torch.zeros(1, dtype=torch.long))
-
-    @torch.no_grad()
-    def _momentum_update_key_encoder(self):
-        """
-        Momentum update of the key encoder
-        """
-        for param_q, param_k in zip(self.encoder_q.parameters(), self.encoder_k.parameters()):
-            param_k.data = param_k.data * self.m + param_q.data * (1. - self.m)
+        # build a 2-layer predictor
+        self.predictor = nn.Sequential(nn.Linear(dim, mlp_dim, bias=False),
+                                        nn.BatchNorm1d(mlp_dim),
+                                        nn.ReLU(inplace=True), # hidden layer
+                                        nn.Linear(mlp_dim, dim)) # output layer
 
     @torch.no_grad()
-    def _dequeue_and_enqueue(self, keys):
-        # gather keys before updating queue
-        keys = concat_all_gather(keys)
+    def _update_momentum_encoder(self):
+        """Momentum update of the momentum encoder"""
+        for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
+            param_m.data = param_m.data * self.m + param_b.data * (1. - self.m)
 
-        batch_size = keys.shape[0]
-
-        ptr = int(self.queue_ptr)
-        assert self.K % batch_size == 0  # for simplicity
-
-        # replace the keys at ptr (dequeue and enqueue)
-        self.queue[:, ptr:ptr + batch_size] = keys.T
-        ptr = (ptr + batch_size) % self.K  # move pointer
-
-        self.queue_ptr[0] = ptr
-
-    @torch.no_grad()
-    def _batch_shuffle_ddp(self, x):
-        """
-        Batch shuffle, for making use of BatchNorm.
-        *** Only support DistributedDataParallel (DDP) model. ***
-        """
-        # gather from all gpus
-        batch_size_this = x.shape[0]
-        x_gather = concat_all_gather(x)
-        batch_size_all = x_gather.shape[0]
-
-        num_gpus = batch_size_all // batch_size_this
-
-        # random shuffle index
-        idx_shuffle = torch.randperm(batch_size_all).cuda()
-
-        # broadcast to all gpus
-        torch.distributed.broadcast(idx_shuffle, src=0)
-
-        # index for restoring
-        idx_unshuffle = torch.argsort(idx_shuffle)
-
-        # shuffled index for this gpu
-        gpu_idx = torch.distributed.get_rank()
-        idx_this = idx_shuffle.view(num_gpus, -1)[gpu_idx]
-
-        return x_gather[idx_this], idx_unshuffle
-
-    @torch.no_grad()
-    def _batch_unshuffle_ddp(self, x, idx_unshuffle):
-        """
-        Undo batch shuffle.
-        *** Only support DistributedDataParallel (DDP) model. ***
-        """
-        # gather from all gpus
-        batch_size_this = x.shape[0]
-        x_gather = concat_all_gather(x)
-        batch_size_all = x_gather.shape[0]
-
-        num_gpus = batch_size_all // batch_size_this
-
-        # restored index for this gpu
-        gpu_idx = torch.distributed.get_rank()
-        idx_this = idx_unshuffle.view(num_gpus, -1)[gpu_idx]
-
-        return x_gather[idx_this]
-
-    def forward(self, im_q, im_k):
+    def forward(self, im1, im2):
         """
         Input:
-            im_q: a batch of query images
-            im_k: a batch of key images
+            im1: first views of images
+            im2: second views of images
         Output:
             logits, targets
         """
 
-        # compute query features
-        q = self.encoder_q(im_q)  # queries: NxC
-        q = nn.functional.normalize(q, dim=1)
+        # compute features
+        p1 = self.predictor(self.base_encoder(im1))
+        p2 = self.predictor(self.base_encoder(im2))
+        # normalize
+        p1 = nn.functional.normalize(p1, dim=1)
+        p2 = nn.functional.normalize(p2, dim=1)
 
-        # compute key features
-        with torch.no_grad():  # no gradient to keys
-            self._momentum_update_key_encoder()  # update the key encoder
+        # compute momentum features as targets
+        with torch.no_grad():  # no gradient
+            self._update_momentum_encoder()  # update the momentum encoder
+            t1 = self.momentum_encoder(im1)
+            t2 = self.momentum_encoder(im2)
+            # normalize
+            t1 = nn.functional.normalize(t1, dim=1)
+            t2 = nn.functional.normalize(t2, dim=1)
 
-            # shuffle for making use of BN
-            im_k, idx_unshuffle = self._batch_shuffle_ddp(im_k)
-
-            k = self.encoder_k(im_k)  # keys: NxC
-            k = nn.functional.normalize(k, dim=1)
-
-            # undo shuffle
-            k = self._batch_unshuffle_ddp(k, idx_unshuffle)
+            # gather all targets
+            t1 = concat_all_gather(t1)
+            t2 = concat_all_gather(t2)
 
         # compute logits
         # Einstein sum is more intuitive
-        # positive logits: Nx1
-        l_pos = torch.einsum('nc,nc->n', [q, k]).unsqueeze(-1)
-        # negative logits: NxK
-        l_neg = torch.einsum('nc,ck->nk', [q, self.queue.clone().detach()])
+        logits1 = torch.einsum('nc,mc->nm', [p1, t2]) / self.T
+        logits2 = torch.einsum('nc,mc->nm', [p2, t1]) / self.T
 
-        # logits: Nx(1+K)
-        logits = torch.cat([l_pos, l_neg], dim=1)
+        N = logits1.shape[0]  # batch size per GPU
+        labels = torch.arange(N) + N * torch.distributed.get_rank()
 
-        # apply temperature
-        logits /= self.T
-
-        # labels: positive key indicators
-        labels = torch.zeros(logits.shape[0], dtype=torch.long).cuda()
-
-        # dequeue and enqueue
-        self._dequeue_and_enqueue(k)
-
-        return logits, labels
+        return logits1, logits2, labels
 
 
 # utils
