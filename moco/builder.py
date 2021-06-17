@@ -33,12 +33,12 @@ class MoCo(nn.Module):
         self.base_encoder.fc = nn.Sequential(self.base_encoder.fc,
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.ReLU(inplace=True), # first layer
-                                            nn.Linear(mlp_dim, dim, bias=False)) # second layer
+                                            nn.Linear(mlp_dim, dim)) # second layer
         self.base_encoder.fc[0].bias.requires_grad = False # hack: not use bias as it is followed by BN
         self.momentum_encoder.fc = nn.Sequential(self.momentum_encoder.fc,
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.ReLU(inplace=True), # first layer
-                                            nn.Linear(mlp_dim, dim, bias=False)) # second layer
+                                            nn.Linear(mlp_dim, dim)) # second layer
 
         for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
             param_m.data.copy_(param_b.data)  # initialize
@@ -91,9 +91,9 @@ class MoCo(nn.Module):
         logits2 = torch.einsum('nc,mc->nm', [p2, t1]) / self.T
 
         N = logits1.shape[0]  # batch size per GPU
-        labels = torch.arange(N) + N * torch.distributed.get_rank()
+        labels = torch.arange(N, dtype=torch.long) + N * torch.distributed.get_rank()
 
-        return logits1, logits2, labels
+        return logits1, logits2, labels.cuda()
 
 
 # utils

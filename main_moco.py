@@ -6,6 +6,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
+import builtins
 import math
 import os
 import random
@@ -32,7 +33,7 @@ import moco.optimizer
 
 torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
-    and callable(models.__dict__[name]))
+    and callable(torchvision_models.__dict__[name]))
 
 model_names = ['vit_s', 'vit_b', 'vit_l'] + torchvision_model_names
 
@@ -96,7 +97,7 @@ parser.add_argument('--moco-t', default=1.0, type=float,
 
 # other upgrades
 parser.add_argument('--optimizer', default='lars', type=str,
-                    choices=['lars', 'adamw'] 
+                    choices=['lars', 'adamw'],
                     help='optimizer used (default: lars)')
 
 
@@ -138,6 +139,12 @@ def main():
 def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
 
+    # suppress printing if not master
+    if args.multiprocessing_distributed and args.gpu != 0:
+        def print_pass(*args):
+            pass
+        builtins.print = print_pass
+
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
 
@@ -153,7 +160,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # create model
     print("=> creating model '{}'".format(args.arch))
     model = moco.builder.MoCo(
-        models.__dict__[args.arch],
+        torchvision_models.__dict__[args.arch],
         args.moco_dim, args.moco_mlp_dim, args.moco_m, args.moco_t)
 
     # infer learning rate before changing batch size
@@ -185,7 +192,7 @@ def main_worker(gpu, ngpus_per_node, args):
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
         # comment out the following line for debugging
-        raise NotImplementedError("Only DistributedDataParallel is supported.")
+        # raise NotImplementedError("Only DistributedDataParallel is supported.")
     else:
         # AllGather/rank implementation in this code only supports DistributedDataParallel.
         raise NotImplementedError("Only DistributedDataParallel is supported.")
@@ -313,9 +320,9 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
         output1, output2, target = model(im1=images[0], im2=images[1])
         loss = (criterion(output1, target) + criterion(output2, target)) * (args.moco_t * 2.)
 
-        # acc1/acc5 are (K+1)-way contrast classifier accuracy
+        # acc1/acc5 are N-way contrast classifier accuracy
         # measure accuracy and record loss
-        acc1, acc5 = accuracy(output, target, topk=(1, 5))
+        acc1, acc5 = accuracy(output1, target, topk=(1, 5))
         losses.update(loss.item(), images[0].size(0))
         top1.update(acc1[0], images[0].size(0))
         top5.update(acc5[0], images[0].size(0))
