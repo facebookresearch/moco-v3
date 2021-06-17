@@ -99,6 +99,8 @@ parser.add_argument('--moco-t', default=1.0, type=float,
 parser.add_argument('--optimizer', default='lars', type=str,
                     choices=['lars', 'adamw'],
                     help='optimizer used (default: lars)')
+parser.add_argument('--warmup-epochs', default=10, type=int, metavar='N',
+                    help='number of warmup epochs')
 
 
 def main():
@@ -192,7 +194,7 @@ def main_worker(gpu, ngpus_per_node, args):
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
         # comment out the following line for debugging
-        # raise NotImplementedError("Only DistributedDataParallel is supported.")
+        raise NotImplementedError("Only DistributedDataParallel is supported.")
     else:
         # AllGather/rank implementation in this code only supports DistributedDataParallel.
         raise NotImplementedError("Only DistributedDataParallel is supported.")
@@ -204,7 +206,7 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.optimizer == 'lars':
         optimizer = moco.optimizer.LARS(model.parameters(), args.lr,
                                         weight_decay=args.weight_decay,
-                                        momentum=args.momentum)
+                                        momentum=args.momentum, nesterov=True)
     elif args.optimizer == 'adamw':
         optimizer = torch.optim.AdamW(model.parameters(), args.lr,
                                 momentum=args.momentum,
