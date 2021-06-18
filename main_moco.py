@@ -14,6 +14,10 @@ import shutil
 import time
 import warnings
 
+# ===== SLURM, to delete =====
+import signal
+# ===== SLURM, to delete =====
+
 import torch
 import torch.nn as nn
 import torch.nn.parallel
@@ -30,6 +34,17 @@ import torchvision.models as torchvision_models
 import moco.builder
 import moco.loader
 import moco.optimizer
+
+# ===== SLURM, to delete =====
+def signalHandler(a, b):
+    if a == signal.SIGUSR1:
+        logger.info('Got SIGUSR1.')
+    elif a == signal.SIGTERM:
+        logger.info('Got SIGTERM.')
+
+signal.signal(signal.SIGUSR1, signalHandler)
+signal.signal(signal.SIGTERM, signalHandler)
+# ===== SLURM, to delete =====
 
 torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
