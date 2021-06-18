@@ -145,8 +145,8 @@ def main():
 def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
 
-    # suppress printing if not master
-    if args.multiprocessing_distributed and (args.gpu != 0 or args.rank != 0):
+    # suppress printing if not first GPU on each node
+    if args.multiprocessing_distributed and args.gpu != 0:
         def print_pass(*args):
             pass
         builtins.print = print_pass
@@ -397,9 +397,9 @@ class ProgressMeter(object):
 def adjust_learning_rate(optimizer, init_lr, epoch, args):
     """Decays the learning rate with half-cycle cosine after warmup"""
     if epoch < args.warmup_epochs:
-        lr = init_lr / args.warmup_epochs * epoch
+        lr = init_lr / (args.warmup_epochs + 1) * (epoch + 1)
     else:
-        lr = init_lr * 0.5 * (1. + math.cos(math.pi * (epoch - warmup_epochs) / (args.epochs - args.warmup_epochs)))
+        lr = init_lr * 0.5 * (1. + math.cos(math.pi * (epoch - args.warmup_epochs) / (args.epochs - args.warmup_epochs)))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 

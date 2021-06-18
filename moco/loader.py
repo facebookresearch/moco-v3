@@ -16,9 +16,9 @@ class TwoCropsTransform:
         self.base_transform2 = base_transform2
 
     def __call__(self, x):
-        q = self.base_transform1(x)
-        k = self.base_transform2(x)
-        return [q, k]
+        im1 = self.base_transform1(x)
+        im2 = self.base_transform2(x)
+        return [im1, im2]
 
 
 class GaussianBlur(object):
