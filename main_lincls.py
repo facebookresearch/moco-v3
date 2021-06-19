@@ -25,11 +25,13 @@ import torch.utils.data
 import torch.utils.data.distributed
 import torchvision.transforms as transforms
 import torchvision.datasets as datasets
-import torchvision.models as models
+import torchvision.models as torchvision_models
 
-model_names = sorted(name for name in models.__dict__
+torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
-    and callable(models.__dict__[name]))
+    and callable(torchvision_models.__dict__[name]))
+
+model_names = ['vit_s', 'vit_b', 'vit_l'] + torchvision_model_names
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
@@ -45,9 +47,9 @@ parser.add_argument('--epochs', default=90, type=int, metavar='N',
                     help='number of total epochs to run')
 parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
                     help='manual epoch number (useful on restarts)')
-parser.add_argument('-b', '--batch-size', default=4096, type=int,
+parser.add_argument('-b', '--batch-size', default=1024, type=int,
                     metavar='N',
-                    help='mini-batch size (default: 4096), this is the total '
+                    help='mini-batch size (default: 1024), this is the total '
                          'batch size of all GPUs on the current node when '
                          'using Data Parallel or Distributed Data Parallel')
 parser.add_argument('--lr', '--learning-rate', default=0.1, type=float,
@@ -145,9 +147,10 @@ def main_worker(gpu, ngpus_per_node, args):
             args.rank = args.rank * ngpus_per_node + gpu
         dist.init_process_group(backend=args.dist_backend, init_method=args.dist_url,
                                 world_size=args.world_size, rank=args.rank)
+        torch.distributed.barrier()
     # create model
     print("=> creating model '{}'".format(args.arch))
-    model = models.__dict__[args.arch]()
+    model = torchvision_models.__dict__[args.arch]()
 
     # freeze all layers but the last fc
     for name, param in model.named_parameters():
@@ -184,7 +187,9 @@ def main_worker(gpu, ngpus_per_node, args):
     # infer learning rate before changing batch size
     init_lr = args.lr * args.batch_size / 256
 
-    if args.distributed:
+    if not torch.cuda.is_available():
+        print('using CPU, this will be slow')
+    elif args.distributed:
         # For multiprocessing distributed, DistributedDataParallel constructor
         # should always set the single device scope, otherwise,
         # DistributedDataParallel will use all available devices.
@@ -341,7 +346,8 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
         if args.gpu is not None:
             images = images.cuda(args.gpu, non_blocking=True)
-        target = target.cuda(args.gpu, non_blocking=True)
+        if torch.cuda.is_available():
+            target = target.cuda(args.gpu, non_blocking=True)
 
         # compute output
         output = model(images)
@@ -384,7 +390,8 @@ def validate(val_loader, model, criterion, args):
         for i, (images, target) in enumerate(val_loader):
             if args.gpu is not None:
                 images = images.cuda(args.gpu, non_blocking=True)
-            target = target.cuda(args.gpu, non_blocking=True)
+            if torch.cuda.is_available():
+                target = target.cuda(args.gpu, non_blocking=True)
 
             # compute output
             output = model(images)
