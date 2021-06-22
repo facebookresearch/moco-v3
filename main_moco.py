@@ -226,7 +226,7 @@ def main_worker(gpu, ngpus_per_node, args):
     if args.optimizer == 'lars':
         optimizer = moco.optimizer.LARS(model.parameters(), args.lr,
                                         weight_decay=args.weight_decay,
-                                        momentum=args.momentum, nesterov=True)
+                                        momentum=args.momentum)
     elif args.optimizer == 'adamw':
         optimizer = torch.optim.AdamW(model.parameters(), args.lr,
                                 momentum=args.momentum,

@@ -11,10 +11,8 @@ class LARS(torch.optim.Optimizer):
     """
     LARS optimizer, no rate scaling or weight decay for normalization layers and biases.
     """
-    def __init__(self, params, lr=0, weight_decay=0, momentum=0.9, nesterov=False, trust_coefficient=0.001):
-        defaults = dict(lr=lr, weight_decay=weight_decay, 
-                        momentum=momentum, nesterov=nesterov,
-                        trust_coefficient=trust_coefficient)
+    def __init__(self, params, lr=0, weight_decay=0, momentum=0.9, trust_coefficient=0.001):
+        defaults = dict(lr=lr, weight_decay=weight_decay, momentum=momentum, trust_coefficient=trust_coefficient)
         super().__init__(params, defaults)
 
     @torch.no_grad()
@@ -42,8 +40,4 @@ class LARS(torch.optim.Optimizer):
                     param_state['mu'] = torch.zeros_like(p)
                 mu = param_state['mu']
                 mu.mul_(g['momentum']).add_(dp)
-                if g['nesterov']:
-                    dp = dp.add(mu, alpha=g['momentum'])
-                else:
-                    dp = mu
-                p.add_(dp, alpha=-g['lr'])
+                p.add_(mu, alpha=-g['lr'])
