@@ -234,6 +234,8 @@ def main_worker(gpu, ngpus_per_node, args):
                                 momentum=args.momentum,
                                 weight_decay=args.weight_decay)
 
+    scaler = torch.cuda.amp.GradScaler() if args.mixed_precision else None
+
     # optionally resume from a checkpoint
     if args.resume:
         if os.path.isfile(args.resume):
@@ -247,6 +249,8 @@ def main_worker(gpu, ngpus_per_node, args):
             args.start_epoch = checkpoint['epoch']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
+            if scaler is not None:
+                scaler.load_state_dict(checkpoint['scaler'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
         else:
@@ -305,7 +309,7 @@ def main_worker(gpu, ngpus_per_node, args):
         adjust_learning_rate(optimizer, init_lr, epoch, args)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, epoch, args)
+        train(train_loader, model, criterion, optimizer, scaler, epoch, args)
 
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank % ngpus_per_node == 0):
@@ -314,10 +318,11 @@ def main_worker(gpu, ngpus_per_node, args):
                 'arch': args.arch,
                 'state_dict': model.state_dict(),
                 'optimizer' : optimizer.state_dict(),
+                'scaler': None if scaler is None else scaler.state_dict(),
             }, is_best=False, filename='%s/checkpoint_%04d.pth.tar' % (args.checkpoint_folder, epoch))
 
 
-def train(train_loader, model, criterion, optimizer, epoch, args):
+def train(train_loader, model, criterion, optimizer, scaler, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -342,8 +347,9 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
             images[1] = images[1].cuda(args.gpu, non_blocking=True)
 
         # compute output
-        output1, output2, target = model(im1=images[0], im2=images[1], m=moco_m)
-        loss = (criterion(output1, target) + criterion(output2, target)) * (args.moco_t * 2.)
+        with torch.cuda.amp.autocast(scaler is not None):
+            output1, output2, target = model(im1=images[0], im2=images[1], m=moco_m)
+            loss = (criterion(output1, target) + criterion(output2, target)) * (args.moco_t * 2.)
 
         # acc1/acc5 are N-way contrast classifier accuracy
         # measure accuracy and record loss
@@ -354,8 +360,13 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
-        loss.backward()
-        optimizer.step()
+        if scaler is None:
+            loss.backward()
+            optimizer.step()
+        else:
+            scaler.scale(loss).backward()
+            scaler.step(optimizer)
+            scaler.update()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
