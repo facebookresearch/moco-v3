@@ -226,7 +226,7 @@ def main_worker(gpu, ngpus_per_node, args):
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
         # comment out the following line for debugging
-        # raise NotImplementedError("Only DistributedDataParallel is supported.")
+        raise NotImplementedError("Only DistributedDataParallel is supported.")
     else:
         # AllGather/rank implementation in this code only supports DistributedDataParallel.
         raise NotImplementedError("Only DistributedDataParallel is supported.")
@@ -240,8 +240,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                         weight_decay=args.weight_decay,
                                         momentum=args.momentum)
     elif args.optimizer == 'adamw':
-        optimizer = torch.optim.AdamW(model.parameters(), args.lr,
-                                momentum=args.momentum,
+        optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,
                                 weight_decay=args.weight_decay)
 
     scaler = torch.cuda.amp.GradScaler() if args.mixed_precision else None
