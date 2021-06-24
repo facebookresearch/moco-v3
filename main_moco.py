@@ -106,7 +106,9 @@ parser.add_argument('--moco-dim', default=256, type=int,
 parser.add_argument('--moco-mlp-dim', default=4096, type=int,
                     help='hidden dimension in MLPs (default: 4096)')
 parser.add_argument('--moco-m', default=0.99, type=float,
-                    help='moco momentum of updating momentum encoder (default: 0.99)')
+                    help='moco (base) momentum of updating momentum encoder (default: 0.99)')
+parser.add_argument('--moco-m-cos', action='store_true',
+                    help='increase moco (base) momentum with a half-cycle cosine schedule')
 parser.add_argument('--moco-t', default=1.0, type=float,
                     help='softmax temperature (default: 1.0)')
 
@@ -183,7 +185,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print("=> creating model '{}'".format(args.arch))
     model = moco.builder.MoCo(
         torchvision_models.__dict__[args.arch],
-        args.moco_dim, args.moco_mlp_dim, args.moco_m, args.moco_t)
+        args.moco_dim, args.moco_mlp_dim, args.moco_t)
 
     # infer learning rate before changing batch size
     init_lr = args.lr * args.batch_size / 256
@@ -330,6 +332,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
     model.train()
 
     end = time.time()
+    moco_m = adjust_moco_momentum(epoch, args)
     for i, (images, _) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
@@ -339,7 +342,7 @@ def train(train_loader, model, criterion, optimizer, epoch, args):
             images[1] = images[1].cuda(args.gpu, non_blocking=True)
 
         # compute output
-        output1, output2, target = model(im1=images[0], im2=images[1])
+        output1, output2, target = model(im1=images[0], im2=images[1], m=moco_m)
         loss = (criterion(output1, target) + criterion(output2, target)) * (args.moco_t * 2.)
 
         # acc1/acc5 are N-way contrast classifier accuracy
@@ -417,6 +420,15 @@ def adjust_learning_rate(optimizer, init_lr, epoch, args):
         lr = init_lr * 0.5 * (1. + math.cos(math.pi * (epoch - args.warmup_epochs) / (args.epochs - args.warmup_epochs)))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+
+
+def adjust_moco_momentum(epoch, args):
+    """Adjust moco momentum based on current epoch"""
+    if args.moco_m_cos:
+        m = 1. - 0.5 * (1. + math.cos(math.pi * epoch / args.epochs)) * (1. - args.moco_m)
+    else:
+        m = args.moco_m
+    return m
 
 
 def accuracy(output, target, topk=(1,)):

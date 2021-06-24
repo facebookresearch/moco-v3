@@ -13,7 +13,7 @@ class MoCo(nn.Module):
     Build a MoCo model with: a base encoder, a momentum encoder
     https://arxiv.org/abs/1911.05722
     """
-    def __init__(self, base_encoder, dim=256, mlp_dim=4096, m=0.99, T=1.0):
+    def __init__(self, base_encoder, dim=256, mlp_dim=4096, T=1.0):
         """
         dim: feature dimension (default: 256)
         mlp_dim: hidden dimension in MLPs (default: 4096)
@@ -22,7 +22,6 @@ class MoCo(nn.Module):
         """
         super(MoCo, self).__init__()
 
-        self.m = m
         self.T = T
 
         # create the encoders
@@ -51,16 +50,17 @@ class MoCo(nn.Module):
                                         nn.Linear(mlp_dim, dim)) # output layer
 
     @torch.no_grad()
-    def _update_momentum_encoder(self):
+    def _update_momentum_encoder(self, m):
         """Momentum update of the momentum encoder"""
         for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
-            param_m.data = param_m.data * self.m + param_b.data * (1. - self.m)
+            param_m.data = param_m.data * m + param_b.data * (1. - m)
 
-    def forward(self, im1, im2):
+    def forward(self, im1, im2, m):
         """
         Input:
             im1: first views of images
             im2: second views of images
+            m: moco momentum
         Output:
             logits, targets
         """
@@ -74,7 +74,7 @@ class MoCo(nn.Module):
 
         # compute momentum features as targets
         with torch.no_grad():  # no gradient
-            self._update_momentum_encoder()  # update the momentum encoder
+            self._update_momentum_encoder(m)  # update the momentum encoder
             t1 = self.momentum_encoder(im1)
             t2 = self.momentum_encoder(im2)
             # normalize
