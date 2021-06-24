@@ -31,6 +31,9 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as torchvision_models
 
+from functools import partial
+import vits
+
 import moco.builder
 import moco.loader
 import moco.optimizer
@@ -50,7 +53,7 @@ torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(torchvision_models.__dict__[name]))
 
-model_names = ['vit_s', 'vit_b', 'vit_l'] + torchvision_model_names
+model_names = ['vit_small', 'vit_base', 'vit_large'] + torchvision_model_names
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
@@ -183,9 +186,16 @@ def main_worker(gpu, ngpus_per_node, args):
         torch.distributed.barrier()
     # create model
     print("=> creating model '{}'".format(args.arch))
-    model = moco.builder.MoCo(
-        torchvision_models.__dict__[args.arch],
-        args.moco_dim, args.moco_mlp_dim, args.moco_t)
+    if args.arch.startswith('vit'):
+        model = moco.builder.MoCo(
+            vits.__dict__[args.arch], 
+            True, # with vit setup
+            args.moco_dim, args.moco_mlp_dim, args.moco_t)
+    else:
+        model = moco.builder.MoCo(
+            partial(torchvision_models.__dict__[args.arch], zero_init_residual=True), 
+            False, # with resnet setup
+            args.moco_dim, args.moco_mlp_dim, args.moco_t)
 
     # infer learning rate before changing batch size
     init_lr = args.lr * args.batch_size / 256
@@ -216,7 +226,7 @@ def main_worker(gpu, ngpus_per_node, args):
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
         # comment out the following line for debugging
-        raise NotImplementedError("Only DistributedDataParallel is supported.")
+        # raise NotImplementedError("Only DistributedDataParallel is supported.")
     else:
         # AllGather/rank implementation in this code only supports DistributedDataParallel.
         raise NotImplementedError("Only DistributedDataParallel is supported.")
