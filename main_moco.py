@@ -53,7 +53,7 @@ torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(torchvision_models.__dict__[name]))
 
-model_names = ['vit_small', 'vit_base', 'vit_large'] + torchvision_model_names
+model_names = ['vit_small', 'vit_base', 'vit_large', 'vit_huge'] + torchvision_model_names
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
@@ -148,6 +148,11 @@ def main():
         args.world_size = int(os.environ["WORLD_SIZE"])
 
     args.distributed = args.world_size > 1 or args.multiprocessing_distributed
+
+    # ===== PATH, to delete =====
+    if not os.path.exists(args.checkpoint_folder):
+        os.makedirs(args.checkpoint_folder)
+    # ===== PATH, to delete =====
 
     ngpus_per_node = torch.cuda.device_count()
     if args.multiprocessing_distributed:

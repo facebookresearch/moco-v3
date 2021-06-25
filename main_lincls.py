@@ -27,11 +27,13 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as torchvision_models
 
+import vits
+
 torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(torchvision_models.__dict__[name]))
 
-model_names = ['vit_s', 'vit_b', 'vit_l'] + torchvision_model_names
+model_names = ['vit_small', 'vit_base', 'vit_large', 'vit_huge'] + torchvision_model_names
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
@@ -150,15 +152,20 @@ def main_worker(gpu, ngpus_per_node, args):
         torch.distributed.barrier()
     # create model
     print("=> creating model '{}'".format(args.arch))
-    model = torchvision_models.__dict__[args.arch]()
+    if args.arch.startswith('vit'):
+        model = vits.__dict__[args.arch]()
+        linear_keyword = 'head'
+    else:
+        model = torchvision_models.__dict__[args.arch]()
+        linear_keyword = 'fc'
 
     # freeze all layers but the last fc
     for name, param in model.named_parameters():
-        if name not in ['fc.weight', 'fc.bias']:
+        if name not in ['%s.weight' % linear_keyword, '%s.bias' % linear_keyword]:
             param.requires_grad = False
     # init the fc layer
-    model.fc.weight.data.normal_(mean=0.0, std=0.01)
-    model.fc.bias.data.zero_()
+    getattr(model, linear_keyword).weight.data.normal_(mean=0.0, std=0.01)
+    getattr(model, linear_keyword).bias.data.zero_()
 
     # load from pre-trained, before DistributedDataParallel constructor
     if args.pretrained:
@@ -170,7 +177,7 @@ def main_worker(gpu, ngpus_per_node, args):
             state_dict = checkpoint['state_dict']
             for k in list(state_dict.keys()):
                 # retain only base_encoder up to before the embedding layer
-                if k.startswith('module.base_encoder') and not k.startswith('module.base_encoder.fc'):
+                if k.startswith('module.base_encoder') and not k.startswith('module.base_encoder.%s' % linear_keyword):
                     # remove prefix
                     state_dict[k[len("module.base_encoder."):]] = state_dict[k]
                 # delete renamed or unused k
@@ -178,7 +185,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
             args.start_epoch = 0
             msg = model.load_state_dict(state_dict, strict=False)
-            assert set(msg.missing_keys) == {"fc.weight", "fc.bias"}
+            assert set(msg.missing_keys) == {"%s.weight" % linear_keyword, "%s.bias" % linear_keyword}
 
             print("=> loaded pre-trained model '{}'".format(args.pretrained))
         else:
@@ -223,7 +230,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     # optimize only the linear classifier
     parameters = list(filter(lambda p: p.requires_grad, model.parameters()))
-    assert len(parameters) == 2  # fc.weight, fc.bias
+    assert len(parameters) == 2  # weight, bias
 
     optimizer = torch.optim.SGD(parameters, init_lr,
                                 momentum=args.momentum,
@@ -316,7 +323,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'optimizer' : optimizer.state_dict(),
             }, is_best)
             if epoch == args.start_epoch:
-                sanity_check(model.state_dict(), args.pretrained)
+                sanity_check(model.state_dict(), args.pretrained, linear_keyword)
 
 
 def train(train_loader, model, criterion, optimizer, epoch, args):
@@ -423,7 +430,7 @@ def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
         shutil.copyfile(filename, 'model_best.pth.tar')
 
 
-def sanity_check(state_dict, pretrained_weights):
+def sanity_check(state_dict, pretrained_weights, linear_keyword):
     """
     Linear classifier should not change any weights other than the linear layer.
     This sanity check asserts nothing wrong happens (e.g., BN stats updated).
@@ -433,8 +440,8 @@ def sanity_check(state_dict, pretrained_weights):
     state_dict_pre = checkpoint['state_dict']
 
     for k in list(state_dict.keys()):
-        # only ignore fc layer
-        if 'fc.weight' in k or 'fc.bias' in k:
+        # only ignore linear layer
+        if '%s.weight' % linear_keyword in k or '%s.bias' % linear_keyword in k:
             continue
 
         # name in pretrained model
