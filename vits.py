@@ -9,41 +9,85 @@ import torch.nn as nn
 from functools import partial
 
 from timm.models.vision_transformer import VisionTransformer, _cfg
-from timm.models.registry import register_model
 
 __all__ = [
     'vit_small', 
     'vit_base',
     'vit_large',
+    'vit_huge',
 ]
 
 
-def vit_small(pretrained=False, **kwargs):
-    model = VisionTransformer(
+class VisionTransformerMoCo(VisionTransformer):
+    def __init__(self, stop_grad_conv1=False, **kwargs):
+        super().__init__(**kwargs)
+        self.stop_grad_conv1 = stop_grad_conv1
+
+    def forward_features(self, x):
+        x = self.patch_embed(x)
+        # Add stop-grad after conv1
+        if self.stop_grad_conv1:
+            x = x.detach()
+        cls_token = self.cls_token.expand(x.shape[0], -1, -1)
+        if self.dist_token is None:
+            x = torch.cat((cls_token, x), dim=1)
+        else:
+            x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
+        x = self.pos_drop(x + self.pos_embed)
+        x = self.blocks(x)
+        x = self.norm(x)
+        if self.dist_token is None:
+            return self.pre_logits(x[:, 0])
+        else:
+            return x[:, 0], x[:, 1]
+
+
+def build_pos_embedding_2d_sincos(grid_size, hidden_dim, temperature):
+    grid_h = torch.arange(grid_size, dtype=torch.float32)
+    grid_w = torch.arange(grid_size, dtype=torch.float32)
+    grid_w, grid_h = torch.meshgrid(grid_w, grid_h)
+
+    assert hidden_dim % 4 == 0, 'Hidden dimension must be an even number for position embedding.'
+    pos_dim = hidden_dim // 4
+    omega = torch.arange(pos_dim, dtype=torch.float32) / pos_dim
+    omega = 1. / (temperature**omega)
+
+    out_w = torch.einsum('m,d->md', [grid_w.flatten(), omega])
+    out_h = torch.einsum('m,d->md', [grid_h.flatten(), omega])
+
+    pos_emb = torch.cat([torch.sin(out_w), torch.cos(out_w), torch.sin(out_h), torch.cos(out_h)], dim=1)[:, None, :]
+
+    p = torch.zeros([1, 1, hidden_dim], dtype=torch.float32)
+    pos_emb = torch.cat([p, pos_emb], dim=0)
+    return pos_emb
+
+
+def vit_small(**kwargs):
+    model = VisionTransformerMoCo(
         patch_size=16, embed_dim=384, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
     return model
 
 
-def vit_base(pretrained=False, **kwargs):
-    model = VisionTransformer(
+def vit_base(**kwargs):
+    model = VisionTransformerMoCo(
         patch_size=16, embed_dim=768, depth=12, num_heads=12, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
     return model
 
 
-def vit_large(pretrained=False, **kwargs):
-    model = VisionTransformer(
+def vit_large(**kwargs):
+    model = VisionTransformerMoCo(
         patch_size=16, embed_dim=1024, depth=24, num_heads=16, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
     return model
 
 
-def vit_huge(pretrained=False, **kwargs):
-    model = VisionTransformer(
+def vit_huge(**kwargs):
+    model = VisionTransformerMoCo(
         patch_size=16, embed_dim=1280, depth=32, num_heads=16, mlp_ratio=4, qkv_bias=True,
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()

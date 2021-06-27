@@ -32,12 +32,6 @@ class MoCo(nn.Module):
             param_m.data.copy_(param_b.data)  # initialize
             param_m.requires_grad = False  # not update by gradient
 
-        # build a 2-layer predictor
-        self.predictor = nn.Sequential(nn.Linear(dim, mlp_dim, bias=False),
-                                        nn.BatchNorm1d(mlp_dim),
-                                        nn.ReLU(inplace=True), # hidden layer
-                                        nn.Linear(mlp_dim, dim)) # output layer
-
 
     def _init_encoders_with_resnet(self, base_encoder, dim=256, mlp_dim=4096):
         # create the encoders
@@ -48,12 +42,20 @@ class MoCo(nn.Module):
         self.base_encoder.fc = nn.Sequential(self.base_encoder.fc,
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.ReLU(inplace=True), # first layer
-                                            nn.Linear(mlp_dim, dim)) # second layer
+                                            nn.Linear(mlp_dim, dim, bias=False),
+                                            nn.BatchNorm1d(dim, affine=False)) # second layer
         self.base_encoder.fc[0].bias.requires_grad = False # hack: not use bias as it is followed by BN
         self.momentum_encoder.fc = nn.Sequential(self.momentum_encoder.fc,
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.ReLU(inplace=True), # first layer
-                                            nn.Linear(mlp_dim, dim)) # second layer
+                                            nn.Linear(mlp_dim, dim, bias=False),
+                                            nn.BatchNorm1d(dim, affine=False)) # second layer
+
+        # build a 2-layer predictor
+        self.predictor = nn.Sequential(nn.Linear(dim, mlp_dim, bias=False),
+                                        nn.BatchNorm1d(mlp_dim),
+                                        nn.ReLU(inplace=True), # hidden layer
+                                        nn.Linear(mlp_dim, dim)) # output layer
 
 
     def _init_encoders_with_vit(self, base_encoder, dim=256, mlp_dim=4096):
@@ -69,7 +71,8 @@ class MoCo(nn.Module):
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.GELU(), # second layer
                                             nn.BatchNorm1d(mlp_dim),
-                                            nn.Linear(mlp_dim, dim)) # third layer
+                                            nn.Linear(mlp_dim, dim, bias=False),
+                                            nn.BatchNorm1d(dim, affine=False)) # third layer
         self.base_encoder.head[0].bias.requires_grad = False # hack: not use bias as it is followed by BN
         self.momentum_encoder.head = nn.Sequential(self.momentum_encoder.head,
                                             nn.BatchNorm1d(mlp_dim),
@@ -78,7 +81,14 @@ class MoCo(nn.Module):
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.GELU(), # second layer
                                             nn.BatchNorm1d(mlp_dim),
-                                            nn.Linear(mlp_dim, dim)) # third layer
+                                            nn.Linear(mlp_dim, dim, bias=False),
+                                            nn.BatchNorm1d(dim, affine=False)) # third layer
+
+        # build a 2-layer predictor
+        self.predictor = nn.Sequential(nn.Linear(dim, mlp_dim, bias=False),
+                                        nn.BatchNorm1d(mlp_dim),
+                                        nn.GELU(), # hidden layer
+                                        nn.Linear(mlp_dim, dim)) # output layer
 
 
     @torch.no_grad()

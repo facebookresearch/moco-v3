@@ -32,6 +32,7 @@ import torchvision.datasets as datasets
 import torchvision.models as torchvision_models
 
 from functools import partial
+import apex
 import vits
 
 import moco.builder
@@ -109,11 +110,15 @@ parser.add_argument('--moco-dim', default=256, type=int,
 parser.add_argument('--moco-mlp-dim', default=4096, type=int,
                     help='hidden dimension in MLPs (default: 4096)')
 parser.add_argument('--moco-m', default=0.99, type=float,
-                    help='moco (base) momentum of updating momentum encoder (default: 0.99)')
-parser.add_argument('--moco-m-cos', action='store_true',
-                    help='increase moco (base) momentum with a half-cycle cosine schedule')
+                    help='moco (initial) momentum of updating momentum encoder '
+                         'the value will gradually increase to 1 with a '
+                         'half-cycle cosine schedule (default: 0.99)')
 parser.add_argument('--moco-t', default=1.0, type=float,
                     help='softmax temperature (default: 1.0)')
+
+# vit specific configs:
+parser.add_argument('--stop-grad-conv1', action='store_true',
+                    help='stop-grad after first conv, or patch embedding')
 
 # other upgrades
 parser.add_argument('--optimizer', default='lars', type=str,
@@ -121,11 +126,13 @@ parser.add_argument('--optimizer', default='lars', type=str,
                     help='optimizer used (default: lars)')
 parser.add_argument('--warmup-epochs', default=10, type=int, metavar='N',
                     help='number of warmup epochs')
-parser.add_argument('--checkpoint-folder', default='.', type=str, metavar='PATH',
-                    help='path to save the checkpoints (default: .)')
 parser.add_argument('--mixed-precision', action='store_true',
                     help='Use mixed precision')
 
+# ===== OTHERS, to delete =====
+parser.add_argument('--checkpoint-folder', default='.', type=str, metavar='PATH',
+                    help='path to save the checkpoints (default: .)')
+# ===== OTHERS, to delete =====
 
 def main():
     args = parser.parse_args()
@@ -171,7 +178,7 @@ def main_worker(gpu, ngpus_per_node, args):
     args.gpu = gpu
 
     # suppress printing if not first GPU on each node
-    if args.multiprocessing_distributed and args.gpu != 0:
+    if args.multiprocessing_distributed and (args.gpu != 0 or args.rank != 0):
         def print_pass(*args):
             pass
         builtins.print = print_pass
@@ -193,7 +200,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('vit'):
         model = moco.builder.MoCo(
-            vits.__dict__[args.arch], 
+            partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1), 
             True, # with vit setup
             args.moco_dim, args.moco_mlp_dim, args.moco_t)
     else:
@@ -221,12 +228,12 @@ def main_worker(gpu, ngpus_per_node, args):
             # ourselves based on the total number of GPUs we have
             args.batch_size = int(args.batch_size / args.world_size)
             args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
+            # Use apex DDP to support stop-grad in networks
+            model = apex.parallel.DistributedDataParallel(module=model, delay_allreduce=True)
         else:
             model.cuda()
-            # DistributedDataParallel will divide and allocate batch_size to all
-            # available GPUs if device_ids are not set
-            model = torch.nn.parallel.DistributedDataParallel(model)
+            # Use apex DDP to support stop-grad in networks
+            model = apex.parallel.DistributedDataParallel(module=model, delay_allreduce=True)
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
@@ -245,7 +252,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                         weight_decay=args.weight_decay,
                                         momentum=args.momentum)
     elif args.optimizer == 'adamw':
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr,
+        optimizer = moco.optimizer.AdamW(model.parameters(), lr=args.lr,
                                 weight_decay=args.weight_decay)
 
     scaler = torch.cuda.amp.GradScaler() if args.mixed_precision else None
@@ -449,11 +456,7 @@ def adjust_learning_rate(optimizer, init_lr, epoch, args):
 
 def adjust_moco_momentum(epoch, args):
     """Adjust moco momentum based on current epoch"""
-    if args.moco_m_cos:
-        m = 1. - 0.5 * (1. + math.cos(math.pi * epoch / args.epochs)) * (1. - args.moco_m)
-    else:
-        m = args.moco_m
-    return m
+    return 1. - 0.5 * (1. + math.cos(math.pi * epoch / args.epochs)) * (1. - args.moco_m)
 
 
 def accuracy(output, target, topk=(1,)):
