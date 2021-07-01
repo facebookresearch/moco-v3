@@ -248,11 +248,11 @@ def main_worker(gpu, ngpus_per_node, args):
     criterion = nn.CrossEntropyLoss().cuda(args.gpu)
 
     if args.optimizer == 'lars':
-        optimizer = moco.optimizer.LARS(model.parameters(), args.lr,
+        optimizer = moco.optimizer.LARS(model.parameters(), init_lr,
                                         weight_decay=args.weight_decay,
                                         momentum=args.momentum)
     elif args.optimizer == 'adamw':
-        optimizer = moco.optimizer.AdamW(model.parameters(), lr=args.lr,
+        optimizer = moco.optimizer.AdamW(model.parameters(), init_lr,
                                 weight_decay=args.weight_decay)
 
     scaler = torch.cuda.amp.GradScaler() if args.mixed_precision else None
