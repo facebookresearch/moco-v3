@@ -40,11 +40,13 @@ class MoCo(nn.Module):
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
         hidden_dim = self.base_encoder.fc.weight.shape[1]
+        del self.base_encoder.fc
         self.base_encoder.fc = nn.Sequential(nn.Linear(hidden_dim, mlp_dim, bias=False),
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.ReLU(inplace=True), # first layer
                                             nn.Linear(mlp_dim, dim, bias=False),
                                             nn.BatchNorm1d(dim, affine=False)) # second layer
+        del self.momentum_encoder.fc
         self.momentum_encoder.fc = nn.Sequential(nn.Linear(hidden_dim, mlp_dim, bias=False),
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.ReLU(inplace=True), # first layer
@@ -65,6 +67,7 @@ class MoCo(nn.Module):
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
         hidden_dim = self.base_encoder.head.weight.shape[1]
+        del self.base_encoder.head
         self.base_encoder.head = nn.Sequential(nn.Linear(hidden_dim, mlp_dim, bias=False),
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.GELU(), # first layer
@@ -74,6 +77,7 @@ class MoCo(nn.Module):
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.Linear(mlp_dim, dim, bias=False),
                                             nn.BatchNorm1d(dim, affine=False)) # third layer
+        del self.momentum_encoder.head
         self.momentum_encoder.head = nn.Sequential(nn.Linear(hidden_dim, mlp_dim, bias=False),
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.GELU(), # first layer
