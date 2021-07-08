@@ -18,13 +18,13 @@ In addition, install [timm](https://github.com/rwightman/pytorch-image-models) f
 
 ### Unsupervised Pre-Training
 
-Similar to MoCo, only **multi-gpu**, **DistributedDataParallel** training is supported; single-gpu or DataParallel training is not supported. In addition, the code is tested with **multi-node** setting, and by default uses automatic **mixed-precision** for pre-training.
+Similar to MoCo, only **multi-gpu**, **DistributedDataParallel** training is supported; single-gpu or DataParallel training is not supported. In addition, the code is improved to better suite the **multi-node** setting, and by default uses automatic **mixed-precision** for pre-training.
 
-Below we exemplify several pre-training commands covering different model architectures, training epochs, single-/multi-node, etc. 
+Below we exemplify several MoCo v3 pre-training commands covering different model architectures, training epochs, single-/multi-node, etc. 
 
 <details>
 <summary>
-MoCo v3 with ResNet-50, 100-Epoch, 2-Node.
+ResNet-50, 100-Epoch, 2-Node.
 </summary>
 
 This is the *default* setting for most hyper-parameters. With a batch size of 4096, the training fits into 2 nodes with a total of 16 Volta 32G GPUs. 
@@ -47,7 +47,7 @@ python main_moco.py \
 
 <details>
 <summary>
-MoCo v3 with ResNet-50, 300-Epoch, 2-Node.
+ResNet-50, 300-Epoch, 2-Node.
 </summary>
 
 On the first node, run:
@@ -63,7 +63,7 @@ On the second node, run the same command as above, with `--rank 1`.
 
 <details>
 <summary>
-MoCo v3 with ResNet-50, 1000-Epoch, 2-Node.
+ResNet-50, 1000-Epoch, 2-Node.
 </summary>
 
 On the first node, run:
@@ -75,6 +75,23 @@ python main_moco.py \
   [your imagenet-folder with train and val folders]
 ```
 On the second node, run the same command as above, with `--rank 1`.
+</details>
+
+<details>
+<summary>
+ViT-Small, 100-Epoch, 1-Node.
+</summary>
+With a batch size of 1024, ViT-Small fits into a single node of 8 Volta 32G GPUs.
+
+```
+python main_moco.py \
+  -a vit_small -b 1024 \
+  --optimizer=adamw --lr=1e-4 --weight-decay=.1 \
+  --warmup-epochs=40 --moco-t=.2 \
+  --dist-url "tcp://[your node 1 address]:[specified port]" \
+  --multiprocessing-distributed --world-size 1 --rank 0 \
+  [your imagenet-folder with train and val folders]
+```
 </details>
 
 ### License
