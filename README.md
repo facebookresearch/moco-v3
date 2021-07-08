@@ -26,7 +26,8 @@ Below we exemplify several pre-training commands covering different model archit
 <summary>
 MoCo v3 with ResNet-50, 100-Epoch, 2-Node.
 </summary>
-This is the default setting for most hyper-parameters. With a batch size of 4096, the training fits into 2 nodes with a total of 16 Volta 32G GPUs.
+This is the default setting for most hyper-parameters. With a batch size of 4096, the training fits into 2 nodes with a total of 16 Volta 32G GPUs. 
+
 On the first node, run:
 ```
 python main_moco.py \
