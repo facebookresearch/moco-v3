@@ -26,7 +26,8 @@ Below we exemplify several pre-training commands covering different model archit
 <summary>
 MoCo v3 with ResNet-50, 100-Epoch, 2-Node.
 </summary>
-This is the default setting for most hyper-parameters. With a batch size of 4096, the training fits into 2 nodes with a total of 16 Volta 32G GPUs. 
+
+This is the *default* setting for most hyper-parameters. With a batch size of 4096, the training fits into 2 nodes with a total of 16 Volta 32G GPUs. 
 
 On the first node, run:
 ```
@@ -42,6 +43,38 @@ python main_moco.py \
   --multiprocessing-distributed --world-size 2 --rank 1 \
   [your imagenet-folder with train and val folders]
 ```
+</details>
+
+<details>
+<summary>
+MoCo v3 with ResNet-50, 300-Epoch, 2-Node.
+</summary>
+
+On the first node, run:
+```
+python main_moco.py \
+  --lr=.3 --epochs=300 \
+  --dist-url "tcp://[your node 1 address]:[specified port]" \
+  --multiprocessing-distributed --world-size 2 --rank 0 \
+  [your imagenet-folder with train and val folders]
+```
+On the second node, run the same command as above, with `--rank 1`.
+</details>
+
+<details>
+<summary>
+MoCo v3 with ResNet-50, 1000-Epoch, 2-Node.
+</summary>
+
+On the first node, run:
+```
+python main_moco.py \
+  --moco-m=0.996 --lr=.3 --wd=1.5e-6 --epochs=1000 \
+  --dist-url "tcp://[your node 1 address]:[specified port]" \
+  --multiprocessing-distributed --world-size 2 --rank 0 \
+  [your imagenet-folder with train and val folders]
+```
+On the second node, run the same command as above, with `--rank 1`.
 </details>
 
 ### License
