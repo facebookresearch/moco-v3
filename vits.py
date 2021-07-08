@@ -21,45 +21,29 @@ __all__ = [
 class VisionTransformerMoCo(VisionTransformer):
     def __init__(self, stop_grad_conv1=False, **kwargs):
         super().__init__(**kwargs)
-        self.stop_grad_conv1 = stop_grad_conv1
-
-    def forward_features(self, x):
-        x = self.patch_embed(x)
-        # Add stop-grad after conv1
-        if self.stop_grad_conv1:
-            x = x.detach()
-        cls_token = self.cls_token.expand(x.shape[0], -1, -1)
-        if self.dist_token is None:
-            x = torch.cat((cls_token, x), dim=1)
-        else:
-            x = torch.cat((cls_token, self.dist_token.expand(x.shape[0], -1, -1), x), dim=1)
-        x = self.pos_drop(x + self.pos_embed)
-        x = self.blocks(x)
-        x = self.norm(x)
-        if self.dist_token is None:
-            return self.pre_logits(x[:, 0])
-        else:
-            return x[:, 0], x[:, 1]
+        self.build_2d_sincos_position_embedding()
+        if stop_grad_conv1:
+            self.patch_embed.proj.weight.requires_grad = False
+            self.patch_embed.proj.bias.requires_grad = False
 
 
-def build_pos_embedding_2d_sincos(grid_size, hidden_dim, temperature):
-    grid_h = torch.arange(grid_size, dtype=torch.float32)
-    grid_w = torch.arange(grid_size, dtype=torch.float32)
-    grid_w, grid_h = torch.meshgrid(grid_w, grid_h)
+    def build_2d_sincos_position_embedding(self, temperature=10000.):
+        h, w = self.patch_embed.grid_size
+        grid_w = torch.arange(w, dtype=torch.float32)
+        grid_h = torch.arange(h, dtype=torch.float32)
+        grid_w, grid_h = torch.meshgrid(grid_w, grid_h)
+        assert self.embed_dim % 4 == 0, 'Hidden dimension must be divisible by 4 for 2D sin-cos position embedding.'
+        pos_dim = self.embed_dim // 4
+        omega = torch.arange(pos_dim, dtype=torch.float32) / pos_dim
+        omega = 1. / (temperature**omega)
+        out_w = torch.einsum('m,d->md', [grid_w.flatten(), omega])
+        out_h = torch.einsum('m,d->md', [grid_h.flatten(), omega])
+        pos_emb = torch.cat([torch.sin(out_w), torch.cos(out_w), torch.sin(out_h), torch.cos(out_h)], dim=1)[None, :, :]
 
-    assert hidden_dim % 4 == 0, 'Hidden dimension must be an even number for position embedding.'
-    pos_dim = hidden_dim // 4
-    omega = torch.arange(pos_dim, dtype=torch.float32) / pos_dim
-    omega = 1. / (temperature**omega)
-
-    out_w = torch.einsum('m,d->md', [grid_w.flatten(), omega])
-    out_h = torch.einsum('m,d->md', [grid_h.flatten(), omega])
-
-    pos_emb = torch.cat([torch.sin(out_w), torch.cos(out_w), torch.sin(out_h), torch.cos(out_h)], dim=1)[:, None, :]
-
-    p = torch.zeros([1, 1, hidden_dim], dtype=torch.float32)
-    pos_emb = torch.cat([p, pos_emb], dim=0)
-    return pos_emb
+        pe_token = torch.zeros([1, 1, self.embed_dim], dtype=torch.float32)
+        del self.pos_embed
+        self.pos_embed = nn.Parameter(torch.cat([pe_token, pos_emb], dim=1))
+        self.pos_embed.requires_grad = False
 
 
 def vit_small(**kwargs):

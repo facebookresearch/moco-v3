@@ -228,17 +228,17 @@ def main_worker(gpu, ngpus_per_node, args):
             # ourselves based on the total number of GPUs we have
             args.batch_size = int(args.batch_size / args.world_size)
             args.workers = int((args.workers + ngpus_per_node - 1) / ngpus_per_node)
-            # Use apex DDP to support stop-grad in networks
-            model = apex.parallel.DistributedDataParallel(module=model, delay_allreduce=True)
+            model = torch.nn.parallel.DistributedDataParallel(model, device_ids=[args.gpu])
         else:
             model.cuda()
-            # Use apex DDP to support stop-grad in networks
-            model = apex.parallel.DistributedDataParallel(module=model, delay_allreduce=True)
+            # DistributedDataParallel will divide and allocate batch_size to all
+            # available GPUs if device_ids are not set
+            model = torch.nn.parallel.DistributedDataParallel(model)
     elif args.gpu is not None:
         torch.cuda.set_device(args.gpu)
         model = model.cuda(args.gpu)
         # comment out the following line for debugging
-        raise NotImplementedError("Only DistributedDataParallel is supported.")
+        # raise NotImplementedError("Only DistributedDataParallel is supported.")
     else:
         # AllGather/rank implementation in this code only supports DistributedDataParallel.
         raise NotImplementedError("Only DistributedDataParallel is supported.")
@@ -285,6 +285,7 @@ def main_worker(gpu, ngpus_per_node, args):
                                      std=[0.229, 0.224, 0.225])
 
     # BYOL's augmentation recipe: https://arxiv.org/abs/2006.07733
+    # except min-scale kept as 0.2
     augmentation1 = [
         transforms.RandomResizedCrop(224, scale=(0.2, 1.)),
         transforms.RandomApply([
