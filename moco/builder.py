@@ -40,7 +40,7 @@ class MoCo(nn.Module):
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
         hidden_dim = self.base_encoder.fc.weight.shape[1]
-        del self.base_encoder.fc
+        del self.base_encoder.fc # remove original fc layer
         self.base_encoder.fc = nn.Sequential(nn.Linear(hidden_dim, mlp_dim, bias=False),
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.ReLU(inplace=True), # first layer
@@ -67,7 +67,7 @@ class MoCo(nn.Module):
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
         hidden_dim = self.base_encoder.head.weight.shape[1]
-        del self.base_encoder.head
+        del self.base_encoder.head # remove original fc layer
         self.base_encoder.head = nn.Sequential(nn.Linear(hidden_dim, mlp_dim, bias=False),
                                             nn.BatchNorm1d(mlp_dim),
                                             nn.GELU(), # first layer

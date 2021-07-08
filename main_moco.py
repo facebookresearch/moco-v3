@@ -32,7 +32,6 @@ import torchvision.datasets as datasets
 import torchvision.models as torchvision_models
 
 from functools import partial
-import apex
 import vits
 
 import moco.builder
@@ -126,8 +125,6 @@ parser.add_argument('--optimizer', default='lars', type=str,
                     help='optimizer used (default: lars)')
 parser.add_argument('--warmup-epochs', default=10, type=int, metavar='N',
                     help='number of warmup epochs')
-parser.add_argument('--mixed-precision', action='store_true',
-                    help='Use mixed precision')
 
 # ===== OTHERS, to delete =====
 parser.add_argument('--checkpoint-folder', default='.', type=str, metavar='PATH',
@@ -255,7 +252,7 @@ def main_worker(gpu, ngpus_per_node, args):
         optimizer = moco.optimizer.AdamW(model.parameters(), init_lr,
                                 weight_decay=args.weight_decay)
 
-    scaler = torch.cuda.amp.GradScaler() if args.mixed_precision else None
+    scaler = torch.cuda.amp.GradScaler()
 
     # optionally resume from a checkpoint
     if args.resume:
@@ -270,8 +267,7 @@ def main_worker(gpu, ngpus_per_node, args):
             args.start_epoch = checkpoint['epoch']
             model.load_state_dict(checkpoint['state_dict'])
             optimizer.load_state_dict(checkpoint['optimizer'])
-            if scaler is not None:
-                scaler.load_state_dict(checkpoint['scaler'])
+            scaler.load_state_dict(checkpoint['scaler'])
             print("=> loaded checkpoint '{}' (epoch {})"
                   .format(args.resume, checkpoint['epoch']))
         else:
@@ -340,7 +336,7 @@ def main_worker(gpu, ngpus_per_node, args):
                 'arch': args.arch,
                 'state_dict': model.state_dict(),
                 'optimizer' : optimizer.state_dict(),
-                'scaler': None if scaler is None else scaler.state_dict(),
+                'scaler': scaler.state_dict(),
             }, is_best=False, filename='%s/checkpoint_%04d.pth.tar' % (args.checkpoint_folder, epoch))
 
 
@@ -369,7 +365,7 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, args):
             images[1] = images[1].cuda(args.gpu, non_blocking=True)
 
         # compute output
-        with torch.cuda.amp.autocast(scaler is not None):
+        with torch.cuda.amp.autocast(True):
             output1, output2, target = model(im1=images[0], im2=images[1], m=moco_m)
             loss = (criterion(output1, target) + criterion(output2, target)) * (args.moco_t * 2.)
 
@@ -382,13 +378,9 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, args):
 
         # compute gradient and do SGD step
         optimizer.zero_grad()
-        if scaler is None:
-            loss.backward()
-            optimizer.step()
-        else:
-            scaler.scale(loss).backward()
-            scaler.step(optimizer)
-            scaler.update()
+        scaler.scale(loss).backward()
+        scaler.step(optimizer)
+        scaler.update()
 
         # measure elapsed time
         batch_time.update(time.time() - end)
