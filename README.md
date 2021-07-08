@@ -16,11 +16,11 @@ Install PyTorch and download the ImageNet dataset following the [official PyTorc
 
 In addition, install [timm](https://github.com/rwightman/pytorch-image-models) for the Vision Transformer [(ViT)](https://arxiv.org/abs/2010.11929) models. 
 
-### Unsupervised Pre-Training
+### Pre-Training
 
 Similar to MoCo, only **multi-gpu**, **DistributedDataParallel** training is supported; single-gpu or DataParallel training is not supported. In addition, the code is improved to better suit the **multi-node** setting, and by default uses automatic **mixed-precision** for pre-training.
 
-Below we list several MoCo v3 pre-training commands. They cover different model architectures, training epochs, single-/multi-node, etc. 
+Below we list some MoCo v3 pre-training commands as examples. They cover different model architectures, training epochs, single-/multi-node, etc. 
 
 <details>
 <summary>ResNet-50, 100-Epoch, 2-Node.</summary>
@@ -30,21 +30,21 @@ This is the *default* setting for most hyper-parameters. With a batch size of 40
 On the first node, run:
 ```
 python main_moco.py \
-  --dist-url "tcp://[your node 1 address]:[specified port]" \
+  --dist-url 'tcp://[your node 1 address]:[specified port]'' \
   --multiprocessing-distributed --world-size 2 --rank 0 \
   [your imagenet-folder with train and val folders]
 ```
 On the second node, run:
 ```
 python main_moco.py \
-  --dist-url "tcp://[your node 1 address]:[specified port]" \
+  --dist-url 'tcp://[your node 1 address]:[specified port]' \
   --multiprocessing-distributed --world-size 2 --rank 1 \
   [your imagenet-folder with train and val folders]
 ```
 </details>
 
 <details>
-<summary>ViT-Small, 100-Epoch, 1-Node.</summary>
+<summary>ViT-Small, 300-Epoch, 1-Node.</summary>
 
 With a batch size of 1024, ViT-Small fits into a single node of 8 Volta 32G GPUs:
 
@@ -52,20 +52,38 @@ With a batch size of 1024, ViT-Small fits into a single node of 8 Volta 32G GPUs
 python main_moco.py \
   -a vit_small -b 1024 \
   --optimizer=adamw --lr=1e-4 --weight-decay=.1 \
-  --warmup-epochs=40 --moco-t=.2 \
-  --dist-url "tcp://[your node 1 address]:[specified port]" \
+  --epochs=300 --warmup-epochs=40 \
+  --moco-t=.2 \
+  --dist-url 'tcp://localhost:10001' \
   --multiprocessing-distributed --world-size 1 --rank 0 \
   [your imagenet-folder with train and val folders]
 ```
+
+Note that the smaller batch size: 1) facilitates stable training, as discussed in the [paper](https://arxiv.org/abs/2104.02057); and 2) cuts inter-node communication cost with single node training. Therefore, we highly recommend this setting for ViT-based explorations.
+
 </details>
 
-### Reference Models
+### Linear Classification
+
+With a pre-trained model, to train a supervised linear classifier on frozen features/weights on an 8-GPU node, run:
+```
+python main_lincls.py \
+  -a [architecture] \
+  --dist-url 'tcp://localhost:10001' \
+  --multiprocessing-distributed --world-size 1 --rank 0 \
+  --pretrained [your checkpoint path]/checkpoint_0xxx.pth.tar \
+  [your imagenet-folder with train and val folders]
+```
+
+The above command uses SGD+Momentum optimizer and a default batch size of 1024.
+
+### Reference Setups
 
 For longer pre-trainings with ResNet-50, we find the following hyper-parameters work well:
 <table><tbody>
 <!-- START TABLE -->
 <!-- TABLE HEADER -->
-<th valign="bottom">epochs</th>
+<th valign="center">epochs<br/></th>
 <th valign="bottom">learning<br/>rate</th>
 <th valign="bottom">weight<br/>decay</th>
 <th valign="bottom">momentum<br/>update</th>
@@ -94,7 +112,7 @@ For longer pre-trainings with ResNet-50, we find the following hyper-parameters 
 </tr>
 </tbody></table>
 
-These hyper-parameters can be set with arguments passed to `main_moco.py`. For example:
+These hyper-parameters can be set with respective arguments. For example:
 
 <details>
 <summary>ResNet-50, 1000-Epoch, 2-Node.</summary>
