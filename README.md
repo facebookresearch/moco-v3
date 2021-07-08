@@ -65,17 +65,20 @@ Note that the smaller batch size: 1) facilitates stable training, as discussed i
 
 ### Linear Classification
 
-With a pre-trained model, to train a supervised linear classifier on frozen features/weights on an 8-GPU node, run:
+By default, we use SGD+Momentum optimizer and a batch size of 1024 for linear classification on frozen features/weights. This fits on an 8-GPU node.
+
+<details>
+<summary>Example linear classification command.</summary>
+
 ```
 python main_lincls.py \
   -a [architecture] \
   --dist-url 'tcp://localhost:10001' \
   --multiprocessing-distributed --world-size 1 --rank 0 \
-  --pretrained [your checkpoint path]/checkpoint_0xxx.pth.tar \
+  --pretrained [your checkpoint path]/[your checkpoint file].pth.tar \
   [your imagenet-folder with train and val folders]
 ```
-
-The above command uses SGD+Momentum optimizer and a default batch size of 1024.
+</details>
 
 ### Reference Setups
 
