@@ -119,6 +119,9 @@ parser.add_argument('--moco-t', default=1.0, type=float,
 parser.add_argument('--vit-bn', action='store_true',
                     help='use batch normalization instead of layer normalization '
                          'in ViT MLP blocks and in the end')
+parser.add_argument('--vit-no-cls-token', action='store_true',
+                    help='remove class token in ViT, and use average pooled '
+                         'features as embedding')
 
 # other upgrades
 parser.add_argument('--optimizer', default='lars', type=str,

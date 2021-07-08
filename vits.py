@@ -19,12 +19,9 @@ __all__ = [
 
 
 class VisionTransformerMoCo(VisionTransformer):
-    def __init__(self, stop_grad_conv1=False, **kwargs):
+    def __init__(self, use_bn=False, **kwargs):
         super().__init__(**kwargs)
         self.build_2d_sincos_position_embedding()
-        if stop_grad_conv1:
-            self.patch_embed.proj.weight.requires_grad = False
-            self.patch_embed.proj.bias.requires_grad = False
 
     def build_2d_sincos_position_embedding(self, temperature=10000.):
         h, w = self.patch_embed.grid_size
