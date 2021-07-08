@@ -23,9 +23,7 @@ Similar to MoCo, only **multi-gpu**, **DistributedDataParallel** training is sup
 Below we exemplify several MoCo v3 pre-training commands covering different model architectures, training epochs, single-/multi-node, etc. 
 
 <details>
-<summary>
-ResNet-50, 100-Epoch, 2-Node.
-</summary>
+<summary>ResNet-50, 100-Epoch, 2-Node.</summary>
 
 This is the *default* setting for most hyper-parameters. With a batch size of 4096, the training fits into 2 nodes with a total of 16 Volta 32G GPUs. 
 
@@ -46,9 +44,7 @@ python main_moco.py \
 </details>
 
 <details>
-<summary>
-ResNet-50, 300-Epoch, 2-Node.
-</summary>
+<summary>ResNet-50, 300-Epoch, 2-Node.</summary>
 
 On the first node, run:
 ```
@@ -62,9 +58,7 @@ On the second node, run the same command as above, with `--rank 1`.
 </details>
 
 <details>
-<summary>
-ResNet-50, 1000-Epoch, 2-Node.
-</summary>
+<summary>ResNet-50, 1000-Epoch, 2-Node.</summary>
 
 On the first node, run:
 ```
@@ -78,10 +72,9 @@ On the second node, run the same command as above, with `--rank 1`.
 </details>
 
 <details>
-<summary>
-ViT-Small, 100-Epoch, 1-Node.
-</summary>
-With a batch size of 1024, ViT-Small fits into a single node of 8 Volta 32G GPUs.
+<summary>ViT-Small, 100-Epoch, 1-Node.</summary>
+
+With a batch size of 1024, ViT-Small fits into a single node of 8 Volta 32G GPUs:
 
 ```
 python main_moco.py \
