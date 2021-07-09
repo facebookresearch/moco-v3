@@ -14,9 +14,9 @@ This is a PyTorch implementation of [MoCo v3](https://arxiv.org/abs/2104.02057):
 
 Install PyTorch and download the ImageNet dataset following the [official PyTorch ImageNet training code](https://github.com/pytorch/examples/tree/master/imagenet). Similar to [MoCo](https://github.com/facebookresearch/moco), the code release contains minimal modifications for both unsupervised pre-training and linear classification to that code. 
 
-In addition, install [timm=0.4.9](https://github.com/rwightman/pytorch-image-models) for the Vision Transformer [(ViT)](https://arxiv.org/abs/2010.11929) models.
+In addition, install [timm](https://github.com/rwightman/pytorch-image-models) for the Vision Transformer [(ViT)](https://arxiv.org/abs/2010.11929) models.
 
-The code has been tested with CUDA 10.2/CuDNN 7.6.5 and PyTorch 1.9.0.
+The code has been tested with CUDA 10.2/CuDNN 7.6.5, PyTorch 1.9.0 and timm 0.4.9.
 
 ### Pre-Training
 
