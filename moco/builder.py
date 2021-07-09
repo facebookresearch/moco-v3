@@ -32,6 +32,21 @@ class MoCo(nn.Module):
             param_m.data.copy_(param_b.data)  # initialize
             param_m.requires_grad = False  # not update by gradient
 
+    def _build_mlp(self, num_layers, input_dim, mlp_dim, output_dim):
+        mlp = []
+        for l in range(num_layers):
+            dim1 = input_dim if l == 0 else mlp_dim
+            dim2 = output_dim if l == num_layers - 1 else mlp_dim
+
+            mlp.append(nn.Linear(dim1, dim2, bias=False))
+
+            if l < num_layers - 1:
+                mlp.append(nn.BatchNorm1d(dim2))
+                mlp.append(nn.ReLU(inplace=True))
+            else:
+                mlp.append(nn.BatchNorm1d(dim2, affine=False))
+
+        return nn.Sequential(mlp)
 
     def _init_encoders_with_resnet(self, base_encoder, dim=256, mlp_dim=4096):
         # create the encoders
@@ -40,25 +55,12 @@ class MoCo(nn.Module):
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
         hidden_dim = self.base_encoder.fc.weight.shape[1]
-        del self.base_encoder.fc # remove original fc layer
-        self.base_encoder.fc = nn.Sequential(nn.Linear(hidden_dim, mlp_dim, bias=False),
-                                            nn.BatchNorm1d(mlp_dim),
-                                            nn.ReLU(inplace=True), # first layer
-                                            nn.Linear(mlp_dim, dim, bias=False),
-                                            nn.BatchNorm1d(dim, affine=False)) # second layer
-        del self.momentum_encoder.fc
-        self.momentum_encoder.fc = nn.Sequential(nn.Linear(hidden_dim, mlp_dim, bias=False),
-                                            nn.BatchNorm1d(mlp_dim),
-                                            nn.ReLU(inplace=True), # first layer
-                                            nn.Linear(mlp_dim, dim, bias=False),
-                                            nn.BatchNorm1d(dim, affine=False)) # second layer
+        del self.base_encoder.fc self.momentum_encoder.fc # remove original fc layer
+        self.base_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
+        self.momentum_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
 
         # build a 2-layer predictor
-        self.predictor = nn.Sequential(nn.Linear(dim, mlp_dim, bias=False),
-                                        nn.BatchNorm1d(mlp_dim),
-                                        nn.ReLU(inplace=True), # hidden layer
-                                        nn.Linear(mlp_dim, dim)) # output layer
-
+        self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
 
     def _init_encoders_with_vit(self, base_encoder, dim=256, mlp_dim=4096):
         # create the encoders
@@ -67,33 +69,12 @@ class MoCo(nn.Module):
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
         hidden_dim = self.base_encoder.head.weight.shape[1]
-        del self.base_encoder.head # remove original fc layer
-        self.base_encoder.head = nn.Sequential(nn.Linear(hidden_dim, mlp_dim, bias=False),
-                                            nn.BatchNorm1d(mlp_dim),
-                                            nn.GELU(), # first layer
-                                            nn.Linear(mlp_dim, mlp_dim, bias=False),
-                                            nn.BatchNorm1d(mlp_dim),
-                                            nn.GELU(), # second layer
-                                            nn.BatchNorm1d(mlp_dim),
-                                            nn.Linear(mlp_dim, dim, bias=False),
-                                            nn.BatchNorm1d(dim, affine=False)) # third layer
-        del self.momentum_encoder.head
-        self.momentum_encoder.head = nn.Sequential(nn.Linear(hidden_dim, mlp_dim, bias=False),
-                                            nn.BatchNorm1d(mlp_dim),
-                                            nn.GELU(), # first layer
-                                            nn.Linear(mlp_dim, mlp_dim, bias=False),
-                                            nn.BatchNorm1d(mlp_dim),
-                                            nn.GELU(), # second layer
-                                            nn.BatchNorm1d(mlp_dim),
-                                            nn.Linear(mlp_dim, dim, bias=False),
-                                            nn.BatchNorm1d(dim, affine=False)) # third layer
+        del self.base_encoder.head self.momentum_encoder.head # remove original fc layer
+        self.base_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
+        self.momentum_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
 
         # build a 2-layer predictor
-        self.predictor = nn.Sequential(nn.Linear(dim, mlp_dim, bias=False),
-                                        nn.BatchNorm1d(mlp_dim),
-                                        nn.GELU(), # hidden layer
-                                        nn.Linear(mlp_dim, dim)) # output layer
-
+        self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
 
     @torch.no_grad()
     def _update_momentum_encoder(self, m):
