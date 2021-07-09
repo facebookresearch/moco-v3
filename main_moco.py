@@ -115,6 +115,10 @@ parser.add_argument('--moco-m', default=0.99, type=float,
 parser.add_argument('--moco-t', default=1.0, type=float,
                     help='softmax temperature (default: 1.0)')
 
+# vit specific configs:
+parser.add_argument('--stop-grad-conv1', action='store_true',
+                    help='stop-grad after first conv, or patch embedding')
+
 # other upgrades
 parser.add_argument('--optimizer', default='lars', type=str,
                     choices=['lars', 'adamw'],
@@ -193,7 +197,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('vit'):
         model = moco.builder.MoCo(
-            vits.__dict__[args.arch], 
+            partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1),
             True, # with vit setup
             args.moco_dim, args.moco_mlp_dim, args.moco_t)
     else:

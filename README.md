@@ -66,7 +66,7 @@ Note that the smaller batch size: 1) facilitates stable training, as discussed i
 </details>
 
 <details>
-<summary>ViT-Base, 300-Epoch, 2-Nodes.</summary>
+<summary>ViT-Base, 300-Epoch, 2-Node.</summary>
 
 With a batch size of 1024, ViT-Base can be trained on 2 nodes:
 
