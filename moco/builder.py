@@ -23,7 +23,6 @@ class MoCo(nn.Module):
         super(MoCo, self).__init__()
 
         self.T = T
-        self.criterion = 
 
         if with_vit:
             self._init_encoders_with_vit(base_encoder, dim, mlp_dim)
@@ -46,6 +45,8 @@ class MoCo(nn.Module):
                 mlp.append(nn.BatchNorm1d(dim2))
                 mlp.append(nn.ReLU(inplace=True))
             else:
+                # similar to SimCLR: https://github.com/google-research/simclr/blob/master/model_util.py#L157
+                # remove this last BN also works
                 mlp.append(nn.BatchNorm1d(dim2, affine=False))
 
         return nn.Sequential(*mlp)
