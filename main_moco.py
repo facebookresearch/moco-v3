@@ -241,9 +241,6 @@ def main_worker(gpu, ngpus_per_node, args):
         raise NotImplementedError("Only DistributedDataParallel is supported.")
     print(model) # print model after SyncBatchNorm
 
-    # define loss function (criterion) and optimizer
-    criterion = nn.CrossEntropyLoss().cuda(args.gpu)
-
     if args.optimizer == 'lars':
         optimizer = moco.optimizer.LARS(model.parameters(), init_lr,
                                         weight_decay=args.weight_decay,
@@ -327,7 +324,7 @@ def main_worker(gpu, ngpus_per_node, args):
         adjust_learning_rate(optimizer, init_lr, epoch, args)
 
         # train for one epoch
-        train(train_loader, model, criterion, optimizer, scaler, epoch, args)
+        train(train_loader, model, optimizer, scaler, epoch, args)
 
         if not args.multiprocessing_distributed or (args.multiprocessing_distributed
                 and args.rank == 0): # only the first GPU saves checkpoint
@@ -340,7 +337,7 @@ def main_worker(gpu, ngpus_per_node, args):
             }, is_best=False, filename='%s/checkpoint_%04d.pth.tar' % (args.checkpoint_folder, epoch))
 
 
-def train(train_loader, model, criterion, optimizer, scaler, epoch, args):
+def train(train_loader, model, optimizer, scaler, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
     losses = AverageMeter('Loss', ':.4e')
@@ -366,7 +363,7 @@ def train(train_loader, model, criterion, optimizer, scaler, epoch, args):
 
         # compute output
         with torch.cuda.amp.autocast(True):
-            output1, output2, target = model(images[0], images[1], moco_m)
+            loss = model(images[0], images[1], moco_m)
             loss = (criterion(output1, target) + criterion(output2, target)) * (args.moco_t * 2.)
 
         # acc1/acc5 are N-way contrast classifier accuracy

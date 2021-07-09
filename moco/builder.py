@@ -23,6 +23,8 @@ class MoCo(nn.Module):
         super(MoCo, self).__init__()
 
         self.T = T
+        self.criterion = nn.CrossEntropyLoss()
+
         if with_vit:
             self._init_encoders_with_vit(base_encoder, dim, mlp_dim)
         else:
@@ -46,7 +48,7 @@ class MoCo(nn.Module):
             else:
                 mlp.append(nn.BatchNorm1d(dim2, affine=False))
 
-        return nn.Sequential(mlp)
+        return nn.Sequential(*mlp)
 
     def _init_encoders_with_resnet(self, base_encoder, dim=256, mlp_dim=4096):
         # create the encoders
@@ -55,7 +57,7 @@ class MoCo(nn.Module):
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
         hidden_dim = self.base_encoder.fc.weight.shape[1]
-        del self.base_encoder.fc self.momentum_encoder.fc # remove original fc layer
+        del self.base_encoder.fc, self.momentum_encoder.fc # remove original fc layer
         self.base_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
         self.momentum_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
 
@@ -69,7 +71,7 @@ class MoCo(nn.Module):
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
         hidden_dim = self.base_encoder.head.weight.shape[1]
-        del self.base_encoder.head self.momentum_encoder.head # remove original fc layer
+        del self.base_encoder.head, self.momentum_encoder.head # remove original fc layer
         self.base_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
         self.momentum_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
 
@@ -82,46 +84,42 @@ class MoCo(nn.Module):
         for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
             param_m.data = param_m.data * m + param_b.data * (1. - m)
 
-    def forward(self, im1, im2, m):
+    def ctr_loss(self, q, k):
+        # normalize
+        q = nn.functional.normalize(q, dim=1)
+        k = nn.functional.normalize(k, dim=1)
+        # Einstein sum is more intuitive
+        logits = torch.einsum('nc,mc->nm', [q, k]) / self.T
+        N = logits.shape[0]  # batch size per GPU
+        labels = torch.arange(N, dtype=torch.long) + N * torch.distributed.get_rank()
+        return self.criterion(logits, labels.cuda()) * (2 * self.T)
+
+    def forward(self, x1, x2, m):
         """
         Input:
-            im1: first views of images
-            im2: second views of images
+            x1: first views of images
+            x2: second views of images
             m: moco momentum
         Output:
-            logits, targets
+            loss
         """
 
         # compute features
-        p1 = self.predictor(self.base_encoder(im1))
-        p2 = self.predictor(self.base_encoder(im2))
-        # normalize
-        p1 = nn.functional.normalize(p1, dim=1)
-        p2 = nn.functional.normalize(p2, dim=1)
+        q1 = self.predictor(self.base_encoder(x1))
+        q2 = self.predictor(self.base_encoder(x2))
 
-        # compute momentum features as targets
         with torch.no_grad():  # no gradient
             self._update_momentum_encoder(m)  # update the momentum encoder
-            t1 = self.momentum_encoder(im1)
-            t2 = self.momentum_encoder(im2)
-            # normalize
-            t1 = nn.functional.normalize(t1, dim=1)
-            t2 = nn.functional.normalize(t2, dim=1)
+
+            # compute momentum features as targets
+            k1 = self.momentum_encoder(x1)
+            k2 = self.momentum_encoder(x2)
 
             # gather all targets
-            t1 = concat_all_gather(t1)
-            t2 = concat_all_gather(t2)
+            k1 = concat_all_gather(k1)
+            k2 = concat_all_gather(k2)
 
-        # compute logits
-        # Einstein sum is more intuitive
-        logits1 = torch.einsum('nc,mc->nm', [p1, t2]) / self.T
-        logits2 = torch.einsum('nc,mc->nm', [p2, t1]) / self.T
-
-        N = logits1.shape[0]  # batch size per GPU
-        labels = torch.arange(N, dtype=torch.long) + N * torch.distributed.get_rank()
-
-        return logits1, logits2, labels.cuda()
-
+        return self.ctr_loss(q1, k2) + self.ctr_loss(q2, k1)
 
 # utils
 @torch.no_grad()
