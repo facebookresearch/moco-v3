@@ -65,6 +65,24 @@ Note that the smaller batch size: 1) facilitates stable training, as discussed i
 
 </details>
 
+<details>
+<summary>ViT-Base, 300-Epoch, 2-Nodes.</summary>
+
+With a batch size of 1024, ViT-Base can be trained on 2 nodes:
+
+```
+python main_moco.py \
+  -a vit_small -b 1024 \
+  --optimizer=adamw --lr=1e-4 --weight-decay=.1 \
+  --epochs=300 --warmup-epochs=40 \
+  --moco-t=.2 \
+  --dist-url 'tcp://[your node 1 address]:[specified port]'' \
+  --multiprocessing-distributed --world-size 2 --rank 0 \
+  [your imagenet-folder with train and val folders]
+```
+On the second node, run the same command as above, with `--rank 1`.
+</details>
+
 ### Linear Classification
 
 By default, we use SGD+Momentum optimizer and a batch size of 1024 for linear classification on frozen features/weights. This fits on an 8-GPU node.
@@ -84,8 +102,6 @@ python main_lincls.py \
 
 ### Reference Setups
 
-#### ResNet-50
-
 For longer pre-trainings with ResNet-50, we find the following hyper-parameters work well (expected performance in the last column, will update logs/pre-trained models soon):
 
 <table><tbody>
@@ -102,21 +118,21 @@ For longer pre-trainings with ResNet-50, we find the following hyper-parameters 
 <td align="center">0.45</td>
 <td align="center">1e-6</td>
 <td align="center">0.99</td>
-<td align="center">~67.5</td>
+<td align="center">[TODO]67.5</td>
 </tr>
 <tr>
 <td align="center">300</td>
 <td align="center">0.3</td>
 <td align="center">1e-6</td>
 <td align="center">0.99</td>
-<td align="center">~72.8</td>
+<td align="center">[TODO]72.8</td>
 </tr>
 <tr>
 <td align="center">1000</td>
 <td align="center">0.3</td>
 <td align="center">1.5e-6</td>
 <td align="center">0.996</td>
-<td align="center">~74.8</td>
+<td align="center">[TODO]74.8</td>
 </tr>
 </tbody></table>
 
@@ -134,28 +150,6 @@ python main_moco.py \
   [your imagenet-folder with train and val folders]
 ```
 On the second node, run the same command as above, with `--rank 1`.
-</details>
-
-#### ViT
-
-For Vision Transformers, we also provide the BatchNorm based backbone, where the LayerNorm in each MLP block (and the last one) is replaced with BatchNorm. We recommend the following hyper-parameters as a starting point:
-
-<details>
-<summary>MoCo v3 with ViT-Small, BatchNorm backbone.</summary>
-
-```
-python main_moco.py \
-  -a vit_small -b 1024 \
-  --vit-bn --vit-no-cls-token \
-  --optimizer=adamw --lr=3e-4 --weight-decay=.05 \
-  --epochs=300 --warmup-epochs=40 \
-  --moco-t=.2 \
-  --dist-url 'tcp://localhost:10001' \
-  --multiprocessing-distributed --world-size 1 --rank 0 \
-  [your imagenet-folder with train and val folders]
-```
-
-Note the changes in learning rate, weight decay, and removal of class token.
 </details>
 
 ### License

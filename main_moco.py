@@ -115,14 +115,6 @@ parser.add_argument('--moco-m', default=0.99, type=float,
 parser.add_argument('--moco-t', default=1.0, type=float,
                     help='softmax temperature (default: 1.0)')
 
-# vit specific configs:
-parser.add_argument('--vit-bn', action='store_true',
-                    help='use batch normalization instead of layer normalization '
-                         'in ViT MLP blocks and in the end')
-parser.add_argument('--vit-no-cls-token', action='store_true',
-                    help='remove class token in ViT, and use average pooled '
-                         'features as embedding')
-
 # other upgrades
 parser.add_argument('--optimizer', default='lars', type=str,
                     choices=['lars', 'adamw'],
@@ -201,7 +193,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('vit'):
         model = moco.builder.MoCo(
-            partial(vits.__dict__[args.arch], use_bn=args.vit_bn, no_cls_token=args.vit_no_cls_token), 
+            vits.__dict__[args.arch], 
             True, # with vit setup
             args.moco_dim, args.moco_mlp_dim, args.moco_t)
     else:
