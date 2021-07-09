@@ -84,15 +84,13 @@ class MoCo(nn.Module):
         for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
             param_m.data = param_m.data * m + param_b.data * (1. - m)
 
-    def ctr_loss(self, q, k):
+    def ctr_loss(self, q, k, labels):
         # normalize
         q = nn.functional.normalize(q, dim=1)
         k = nn.functional.normalize(k, dim=1)
         # Einstein sum is more intuitive
         logits = torch.einsum('nc,mc->nm', [q, k]) / self.T
-        N = logits.shape[0]  # batch size per GPU
-        labels = torch.arange(N, dtype=torch.long) + N * torch.distributed.get_rank()
-        return self.criterion(logits, labels.cuda()) * (2 * self.T)
+        return self.criterion(logits, labels) * (2 * self.T), logits
 
     def forward(self, x1, x2, m):
         """
@@ -119,7 +117,12 @@ class MoCo(nn.Module):
             k1 = concat_all_gather(k1)
             k2 = concat_all_gather(k2)
 
-        return self.ctr_loss(q1, k2) + self.ctr_loss(q2, k1)
+        N = q1.shape[0]  # batch size per GPU
+        labels = (torch.arange(N, dtype=torch.long) + N * torch.distributed.get_rank()).cuda()
+        l1, logits1 = self.ctr_loss(q1, k2, labels)
+        l2, logits2 = self.ctr_loss(q2, k1, labels)
+
+        return l1 + l2, logits1, logits2, labels
 
 # utils
 @torch.no_grad()

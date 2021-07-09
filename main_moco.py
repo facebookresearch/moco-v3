@@ -363,8 +363,7 @@ def train(train_loader, model, optimizer, scaler, epoch, args):
 
         # compute output
         with torch.cuda.amp.autocast(True):
-            loss = model(images[0], images[1], moco_m)
-            loss = (criterion(output1, target) + criterion(output2, target)) * (args.moco_t * 2.)
+            loss, output1, _, target = model(images[0], images[1], moco_m)
 
         # acc1/acc5 are N-way contrast classifier accuracy
         # measure accuracy and record loss
