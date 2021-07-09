@@ -201,7 +201,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('vit'):
         model = moco.builder.MoCo(
-            partial(vits.__dict__[args.arch], use_bn=args.vit_bn), 
+            partial(vits.__dict__[args.arch], use_bn=args.vit_bn, no_cls_token=args.vit_no_cls_token), 
             True, # with vit setup
             args.moco_dim, args.moco_mlp_dim, args.moco_t)
     else:

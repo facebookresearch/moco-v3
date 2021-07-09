@@ -85,6 +85,14 @@ parser.add_argument('--multiprocessing-distributed', action='store_true',
                          'fastest way to use PyTorch for either single node or '
                          'multi node data parallel training')
 
+# vit specific configs:
+parser.add_argument('--vit-bn', action='store_true',
+                    help='use batch normalization instead of layer normalization '
+                         'in ViT MLP blocks and in the end')
+parser.add_argument('--vit-no-cls-token', action='store_true',
+                    help='remove class token in ViT, and use average pooled '
+                         'features as embedding')
+
 # additional configs:
 parser.add_argument('--pretrained', default='', type=str,
                     help='path to moco pretrained checkpoint')
@@ -153,7 +161,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # create model
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('vit'):
-        model = vits.__dict__[args.arch]()
+        model = vits.__dict__[args.arch](use_bn=args.vit_bn, no_cls_token=args.vit_no_cls_token)
         linear_keyword = 'head'
     else:
         model = torchvision_models.__dict__[args.arch]()

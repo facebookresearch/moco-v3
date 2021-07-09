@@ -22,7 +22,7 @@ The code has been tested with CUDA 10.2/CuDNN 7.6.5 and PyTorch 1.9.0.
 
 Similar to MoCo, only **multi-gpu**, **DistributedDataParallel** training is supported; single-gpu or DataParallel training is not supported. In addition, the code is improved to better suit the **multi-node** setting, and by default uses automatic **mixed-precision** for pre-training.
 
-Below we list some MoCo v3 pre-training commands as examples. They cover different model architectures, training epochs, single-/multi-node, etc. 
+Below we list some MoCo v3 pre-training commands as examples. They cover different model architectures, training epochs, single-/multi-node training, etc. 
 
 <details>
 <summary>ResNet-50, 100-Epoch, 2-Node.</summary>
@@ -70,7 +70,7 @@ Note that the smaller batch size: 1) facilitates stable training, as discussed i
 By default, we use SGD+Momentum optimizer and a batch size of 1024 for linear classification on frozen features/weights. This fits on an 8-GPU node.
 
 <details>
-<summary>Example linear classification command.</summary>
+<summary>Linear classification command.</summary>
 
 ```
 python main_lincls.py \
@@ -84,7 +84,10 @@ python main_lincls.py \
 
 ### Reference Setups
 
-For longer pre-trainings with ResNet-50, we find the following hyper-parameters work well:
+#### ResNet-50
+
+For longer pre-trainings with ResNet-50, we find the following hyper-parameters work well (expected performance in the last column, will update logs/pre-trained models soon):
+
 <table><tbody>
 <!-- START TABLE -->
 <!-- TABLE HEADER -->
@@ -99,28 +102,28 @@ For longer pre-trainings with ResNet-50, we find the following hyper-parameters 
 <td align="center">0.45</td>
 <td align="center">1e-6</td>
 <td align="center">0.99</td>
-<td align="center"></td>
+<td align="center">~67.5</td>
 </tr>
 <tr>
 <td align="center">300</td>
 <td align="center">0.3</td>
 <td align="center">1e-6</td>
 <td align="center">0.99</td>
-<td align="center">72.8</td>
+<td align="center">~72.8</td>
 </tr>
 <tr>
 <td align="center">1000</td>
 <td align="center">0.3</td>
 <td align="center">1.5e-6</td>
 <td align="center">0.996</td>
-<td align="center">74.8</td>
+<td align="center">~74.8</td>
 </tr>
 </tbody></table>
 
 These hyper-parameters can be set with respective arguments. For example:
 
 <details>
-<summary>ResNet-50, 1000-Epoch, 2-Node.</summary>
+<summary>MoCo v3 with ResNet-50, 1000-Epoch Training.</summary>
 
 On the first node, run:
 ```
@@ -133,7 +136,27 @@ python main_moco.py \
 On the second node, run the same command as above, with `--rank 1`.
 </details>
 
-We also provide the reference linear classification performance in the last column (will update logs/pre-trained models soon).
+#### ViT
+
+For Vision Transformers, we also provide the BatchNorm based backbone, where the LayerNorm in each MLP block (and the last one) is replaced with BatchNorm. We recommend the following hyper-parameters as a starting point:
+
+<details>
+<summary>MoCo v3 with ViT-Small, BatchNorm backbone.</summary>
+
+```
+python main_moco.py \
+  -a vit_small -b 1024 \
+  --vit-bn --vit-no-cls-token \
+  --optimizer=adamw --lr=3e-4 --weight-decay=.05 \
+  --epochs=300 --warmup-epochs=40 \
+  --moco-t=.2 \
+  --dist-url 'tcp://localhost:10001' \
+  --multiprocessing-distributed --world-size 1 --rank 0 \
+  [your imagenet-folder with train and val folders]
+```
+
+Note the changes in learning rate, weight decay, and removal of class token.
+</details>
 
 ### License
 
