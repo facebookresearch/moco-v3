@@ -23,7 +23,7 @@ class MoCo(nn.Module):
         super(MoCo, self).__init__()
 
         self.T = T
-        self.criterion = nn.CrossEntropyLoss()
+        self.criterion = 
 
         if with_vit:
             self._init_encoders_with_vit(base_encoder, dim, mlp_dim)
@@ -58,6 +58,8 @@ class MoCo(nn.Module):
 
         hidden_dim = self.base_encoder.fc.weight.shape[1]
         del self.base_encoder.fc, self.momentum_encoder.fc # remove original fc layer
+
+        # build a 2-layer projector
         self.base_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
         self.momentum_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
 
@@ -72,6 +74,8 @@ class MoCo(nn.Module):
 
         hidden_dim = self.base_encoder.head.weight.shape[1]
         del self.base_encoder.head, self.momentum_encoder.head # remove original fc layer
+
+        # build a 3-layer projector
         self.base_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
         self.momentum_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
 
@@ -84,13 +88,17 @@ class MoCo(nn.Module):
         for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
             param_m.data = param_m.data * m + param_b.data * (1. - m)
 
-    def ctr_loss(self, q, k, labels):
+    def contrastive_loss(self, q, k):
         # normalize
         q = nn.functional.normalize(q, dim=1)
         k = nn.functional.normalize(k, dim=1)
+        # gather all targets
+        k = concat_all_gather(k)
         # Einstein sum is more intuitive
         logits = torch.einsum('nc,mc->nm', [q, k]) / self.T
-        return self.criterion(logits, labels) * (2 * self.T), logits
+        N = logits.shape[0]  # batch size per GPU
+        labels = (torch.arange(N, dtype=torch.long) + N * torch.distributed.get_rank()).cuda()
+        return nn.CrossEntropyLoss()(logits, labels) * (2 * self.T)
 
     def forward(self, x1, x2, m):
         """
@@ -113,16 +121,7 @@ class MoCo(nn.Module):
             k1 = self.momentum_encoder(x1)
             k2 = self.momentum_encoder(x2)
 
-            # gather all targets
-            k1 = concat_all_gather(k1)
-            k2 = concat_all_gather(k2)
-
-        N = q1.shape[0]  # batch size per GPU
-        labels = (torch.arange(N, dtype=torch.long) + N * torch.distributed.get_rank()).cuda()
-        l1, logits1 = self.ctr_loss(q1, k2, labels)
-        l2, logits2 = self.ctr_loss(q2, k1, labels)
-
-        return l1 + l2, logits1, logits2, labels
+        return self.contrastive_loss(q1, k2) + self.contrastive_loss(q2, k1)
 
 # utils
 @torch.no_grad()
