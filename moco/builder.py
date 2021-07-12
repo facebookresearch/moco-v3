@@ -24,10 +24,17 @@ class MoCo(nn.Module):
 
         self.T = T
 
+        # build encoders
+        self.base_encoder = base_encoder(num_classes=mlp_dim)
+        self.momentum_encoder = base_encoder(num_classes=mlp_dim)
+
         if with_vit:
-            self._init_encoders_with_vit(base_encoder, dim, mlp_dim)
+            self._build_projectors_with_vit(base_encoder, dim, mlp_dim)
         else:
-            self._init_encoders_with_resnet(base_encoder, dim, mlp_dim)
+            self._build_projectors_with_resnet(base_encoder, dim, mlp_dim)
+
+        # build a 2-layer predictor
+        self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
 
         for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
             param_m.data.copy_(param_b.data)  # initialize
@@ -51,12 +58,7 @@ class MoCo(nn.Module):
 
         return nn.Sequential(*mlp)
 
-    def _init_encoders_with_resnet(self, base_encoder, dim=256, mlp_dim=4096):
-        # create the encoders
-        # num_classes is the hidden MLP dimension
-        self.base_encoder = base_encoder(num_classes=mlp_dim)
-        self.momentum_encoder = base_encoder(num_classes=mlp_dim)
-
+    def _build_projectors_with_resnet(self, base_encoder, dim=256, mlp_dim=4096):
         hidden_dim = self.base_encoder.fc.weight.shape[1]
         del self.base_encoder.fc, self.momentum_encoder.fc # remove original fc layer
 
@@ -64,24 +66,13 @@ class MoCo(nn.Module):
         self.base_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
         self.momentum_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
 
-        # build a 2-layer predictor
-        self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
-
-    def _init_encoders_with_vit(self, base_encoder, dim=256, mlp_dim=4096):
-        # create the encoders
-        # num_classes is the hidden MLP dimension
-        self.base_encoder = base_encoder(num_classes=mlp_dim)
-        self.momentum_encoder = base_encoder(num_classes=mlp_dim)
-
+    def _build_projectors_with_vit(self, base_encoder, dim=256, mlp_dim=4096):
         hidden_dim = self.base_encoder.head.weight.shape[1]
         del self.base_encoder.head, self.momentum_encoder.head # remove original fc layer
 
         # build a 3-layer projector
         self.base_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
         self.momentum_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
-
-        # build a 2-layer predictor
-        self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
 
     @torch.no_grad()
     def _update_momentum_encoder(self, m):

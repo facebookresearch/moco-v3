@@ -117,6 +117,8 @@ parser.add_argument('--moco-t', default=1.0, type=float,
                     help='softmax temperature (default: 1.0)')
 
 # vit specific configs:
+parser.add_argument('--fix-init', action='store_true',
+                    help='fix weight init for first conv, or patch embedding')
 parser.add_argument('--stop-grad-conv1', action='store_true',
                     help='stop-grad after first conv, or patch embedding')
 
@@ -198,7 +200,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('vit'):
         model = moco.builder.MoCo(
-            partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1),
+            partial(vits.__dict__[args.arch], fix_init=args.fix_init, stop_grad_conv1=args.stop_grad_conv1),
             True, # with vit setup
             args.moco_dim, args.moco_mlp_dim, args.moco_t)
     else:
@@ -254,6 +256,8 @@ def main_worker(gpu, ngpus_per_node, args):
     # ===== to delete =====
     if args.rank == 0:
         summary_writer = SummaryWriter(logdir=args.checkpoint_folder)
+    else:
+        summary_writer = None
     # ===== to delete =====
 
     # optionally resume from a checkpoint

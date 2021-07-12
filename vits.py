@@ -4,9 +4,11 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
+import math
 import torch
 import torch.nn as nn
-from functools import partial
+from functools import partial, reduce
+from operator import mul
 
 from timm.models.vision_transformer import VisionTransformer, _cfg
 
@@ -19,10 +21,15 @@ __all__ = [
 
 
 class VisionTransformerMoCo(VisionTransformer):
-    def __init__(self, stop_grad_conv1=False, **kwargs):
+    def __init__(self, fix_init=False, stop_grad_conv1=False, **kwargs):
         super().__init__(**kwargs)
         # Use 2D sin-cos position embedding
         self.build_2d_sincos_position_embedding()
+
+        if fix_init:
+            val = math.sqrt(6. / float(3 * reduce(mul, self.patch_embed.patch_size, 1) + self.embed_dim))
+            nn.init.uniform_(self.patch_embed.proj.weight, -val, val)
+            nn.init.zeros_(self.patch_embed.proj.bias)
 
         if stop_grad_conv1:
             self.patch_embed.proj.weight.requires_grad = False
