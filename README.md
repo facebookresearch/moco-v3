@@ -118,7 +118,7 @@ For longer pre-trainings with ResNet-50, we find the following hyper-parameters 
 <td align="center">0.45</td>
 <td align="center">1e-6</td>
 <td align="center">0.99</td>
-<td align="center">[TODO]67.5</td>
+<td align="center">67.4</td>
 </tr>
 <tr>
 <td align="center">300</td>
