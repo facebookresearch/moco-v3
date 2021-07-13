@@ -115,6 +115,8 @@ parser.add_argument('--moco-m', default=0.99, type=float,
                          'half-cycle cosine schedule (default: 0.99)')
 parser.add_argument('--moco-t', default=1.0, type=float,
                     help='softmax temperature (default: 1.0)')
+parser.add_argument('--no-last-bn', action='store_true',
+                    help='whether to not have the last BN in the predictor')
 
 # vit specific configs:
 parser.add_argument('--fix-init', action='store_true',
@@ -202,12 +204,12 @@ def main_worker(gpu, ngpus_per_node, args):
         model = moco.builder.MoCo(
             partial(vits.__dict__[args.arch], fix_init=args.fix_init, stop_grad_conv1=args.stop_grad_conv1),
             True, # with vit setup
-            args.moco_dim, args.moco_mlp_dim, args.moco_t)
+            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.no_last_bn)
     else:
         model = moco.builder.MoCo(
             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True), 
             False, # with resnet setup
-            args.moco_dim, args.moco_mlp_dim, args.moco_t)
+            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.no_last_bn)
 
     # infer learning rate before changing batch size
     init_lr = args.lr * args.batch_size / 256
@@ -278,6 +280,26 @@ def main_worker(gpu, ngpus_per_node, args):
                   .format(args.resume, checkpoint['epoch']))
         else:
             print("=> no checkpoint found at '{}'".format(args.resume))
+    # ===== to delete =====
+    elif os.path.isdir(args.checkpoint_folder):
+        checkpoints = [f for f in os.listdir(args.checkpoint_folder) if 'checkpoint_' in f]
+        if checkpoints:
+            last_checkpoint_name = sorted(checkpoints)[-1]
+            last_checkpoint_file = os.path.join(args.checkpoint_folder, last_checkpoint_name)
+            print("=> loading checkpoint '{}'".format(last_checkpoint_file))
+            if args.gpu is None:
+                checkpoint = torch.load(last_checkpoint_file)
+            else:
+                # Map model to be loaded to specified single gpu.
+                loc = 'cuda:{}'.format(args.gpu)
+                checkpoint = torch.load(last_checkpoint_file, map_location=loc)
+            args.start_epoch = checkpoint['epoch']
+            model.load_state_dict(checkpoint['state_dict'])
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            scaler.load_state_dict(checkpoint['scaler'])
+            print("=> loaded checkpoint '{}' (epoch {})"
+                  .format(last_checkpoint_file, checkpoint['epoch']))
+    # ===== to delete =====
 
     cudnn.benchmark = True
 

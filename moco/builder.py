@@ -13,7 +13,7 @@ class MoCo(nn.Module):
     Build a MoCo model with: a base encoder, a momentum encoder
     https://arxiv.org/abs/1911.05722
     """
-    def __init__(self, base_encoder, with_vit, dim=256, mlp_dim=4096, T=1.0):
+    def __init__(self, base_encoder, with_vit, dim=256, mlp_dim=4096, T=1.0, no_last_bn=False):
         """
         dim: feature dimension (default: 256)
         mlp_dim: hidden dimension in MLPs (default: 4096)
@@ -34,13 +34,13 @@ class MoCo(nn.Module):
             self._build_projectors_with_resnet(base_encoder, dim, mlp_dim)
 
         # build a 2-layer predictor
-        self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
+        self.predictor = self._build_mlp(2, dim, mlp_dim, dim, not no_last_bn)
 
         for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
             param_m.data.copy_(param_b.data)  # initialize
             param_m.requires_grad = False  # not update by gradient
 
-    def _build_mlp(self, num_layers, input_dim, mlp_dim, output_dim):
+    def _build_mlp(self, num_layers, input_dim, mlp_dim, output_dim, last_bn=True):
         mlp = []
         for l in range(num_layers):
             dim1 = input_dim if l == 0 else mlp_dim
@@ -51,7 +51,7 @@ class MoCo(nn.Module):
             if l < num_layers - 1:
                 mlp.append(nn.BatchNorm1d(dim2))
                 mlp.append(nn.ReLU(inplace=True))
-            else:
+            elif last_bn:
                 # similar to SimCLR: https://github.com/google-research/simclr/blob/master/model_util.py#L157
                 # remove this last BN also works
                 mlp.append(nn.BatchNorm1d(dim2, affine=False))
