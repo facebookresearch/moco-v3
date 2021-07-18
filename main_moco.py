@@ -54,7 +54,7 @@ torchvision_model_names = sorted(name for name in torchvision_models.__dict__
     if name.islower() and not name.startswith("__")
     and callable(torchvision_models.__dict__[name]))
 
-model_names = ['vit_small', 'vit_base', 'vit_large', 'vit_huge'] + torchvision_model_names
+model_names = ['vit_small', 'vit_base', 'vit_conv_small', 'vit_conv_base'] + torchvision_model_names
 
 parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
 parser.add_argument('data', metavar='DIR',
@@ -119,8 +119,6 @@ parser.add_argument('--no-last-bn', action='store_true',
                     help='whether to not have the last BN in the predictor')
 
 # vit specific configs:
-parser.add_argument('--fix-init', action='store_true',
-                    help='fix weight init for first conv, or patch embedding')
 parser.add_argument('--stop-grad-conv1', action='store_true',
                     help='stop-grad after first conv, or patch embedding')
 
@@ -202,7 +200,7 @@ def main_worker(gpu, ngpus_per_node, args):
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('vit'):
         model = moco.builder.MoCo(
-            partial(vits.__dict__[args.arch], fix_init=args.fix_init, stop_grad_conv1=args.stop_grad_conv1),
+            partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1),
             True, # with vit setup
             args.moco_dim, args.moco_mlp_dim, args.moco_t, args.no_last_bn)
     else:
@@ -283,7 +281,7 @@ def main_worker(gpu, ngpus_per_node, args):
     # ===== to delete =====
     elif os.path.isdir(args.checkpoint_folder):
         checkpoints = [f for f in os.listdir(args.checkpoint_folder) if 'checkpoint_' in f]
-        if checkpoints:
+        if len(checkpoints):
             last_checkpoint_name = sorted(checkpoints)[-1]
             last_checkpoint_file = os.path.join(args.checkpoint_folder, last_checkpoint_name)
             print("=> loading checkpoint '{}'".format(last_checkpoint_file))
