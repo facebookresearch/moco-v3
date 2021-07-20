@@ -124,7 +124,7 @@ parser.add_argument('--stop-grad-conv1', action='store_true',
 
 # other upgrades
 parser.add_argument('--optimizer', default='lars', type=str,
-                    choices=['lars', 'adamw'],
+                    choices=['lars', 'adamw', 'adamwd'],
                     help='optimizer used (default: lars)')
 parser.add_argument('--warmup-epochs', default=10, type=int, metavar='N',
                     help='number of warmup epochs')
@@ -250,6 +250,9 @@ def main_worker(gpu, ngpus_per_node, args):
                                         momentum=args.momentum)
     elif args.optimizer == 'adamw':
         optimizer = moco.optimizer.AdamW(model.parameters(), init_lr,
+                                weight_decay=args.weight_decay)
+    elif args.optimizer == 'adamwd':
+        optimizer = torch.optim.AdamW(model.parameters(), init_lr,
                                 weight_decay=args.weight_decay)
 
     scaler = torch.cuda.amp.GradScaler()
@@ -469,13 +472,16 @@ def adjust_learning_rate(optimizer, init_lr, epoch, args):
         lr = init_lr / (args.warmup_epochs + 1) * (epoch + 1)
     else:
         lr = init_lr * 0.5 * (1. + math.cos(math.pi * (epoch - args.warmup_epochs) / (args.epochs - args.warmup_epochs)))
+    print('Learning rate at epoch {:05d}: {:.5e}'.format(epoch, lr))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
 
 
 def adjust_moco_momentum(epoch, args):
     """Adjust moco momentum based on current epoch"""
-    return 1. - 0.5 * (1. + math.cos(math.pi * epoch / args.epochs)) * (1. - args.moco_m)
+    m = 1. - 0.5 * (1. + math.cos(math.pi * epoch / args.epochs)) * (1. - args.moco_m)
+    print('Momentum coefficient at epoch {:05d}: {:.5e}'.format(epoch, m))
+    return m
 
 
 if __name__ == '__main__':
