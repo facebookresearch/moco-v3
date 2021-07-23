@@ -124,7 +124,7 @@ parser.add_argument('--stop-grad-conv1', action='store_true',
 
 # other upgrades
 parser.add_argument('--optimizer', default='lars', type=str,
-                    choices=['lars', 'adamw', 'adamwd'],
+                    choices=['lars', 'adamw'],
                     help='optimizer used (default: lars)')
 parser.add_argument('--warmup-epochs', default=10, type=int, metavar='N',
                     help='number of warmup epochs')
@@ -249,12 +249,9 @@ def main_worker(gpu, ngpus_per_node, args):
                                         weight_decay=args.weight_decay,
                                         momentum=args.momentum)
     elif args.optimizer == 'adamw':
-        optimizer = moco.optimizer.AdamW(model.parameters(), init_lr,
-                                weight_decay=args.weight_decay)
-    elif args.optimizer == 'adamwd':
         optimizer = torch.optim.AdamW(model.parameters(), init_lr,
                                 weight_decay=args.weight_decay)
-
+        
     scaler = torch.cuda.amp.GradScaler()
     # ===== to delete =====
     if args.rank == 0:

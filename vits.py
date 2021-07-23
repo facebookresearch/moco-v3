@@ -71,6 +71,7 @@ class VisionTransformerMoCo(VisionTransformer):
         # Use 2D sin-cos position embedding
         self.build_2d_sincos_position_embedding()
 
+        # Other initialization
         for name, m in self.named_modules():
             if isinstance(m, nn.Linear):
                 nn.init.xavier_uniform_(m.weight)
@@ -78,6 +79,7 @@ class VisionTransformerMoCo(VisionTransformer):
             elif isinstance(m, (nn.modules.batchnorm._BatchNorm, nn.LayerNorm)):
                 nn.init.ones_(m.weight)
                 nn.init.zeros_(m.bias)
+        nn.init.normal_(self.cls_token, std=1e-6)
 
         if isinstance(self.patch_embed, PatchEmbed):
             # Xavier_uniform initialization
