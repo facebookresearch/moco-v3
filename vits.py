@@ -74,10 +74,12 @@ class VisionTransformerMoCo(VisionTransformer):
         # Other initialization
         for name, m in self.named_modules():
             if isinstance(m, nn.Linear):
-                nn.init.xavier_uniform_(m.weight)
-                nn.init.zeros_(m.bias)
-            elif isinstance(m, (nn.modules.batchnorm._BatchNorm, nn.LayerNorm)):
-                nn.init.ones_(m.weight)
+                if 'qkv' in name:
+                    # Treat the weights of Q, K, V separately
+                    val = math.sqrt(6. / float(m.weight.shape[0] // 3 + m.weight.shape[1]))
+                    nn.init.uniform_(m.weight, -val, val)
+                else:
+                    nn.init.xavier_uniform_(m.weight)
                 nn.init.zeros_(m.bias)
         nn.init.normal_(self.cls_token, std=1e-6)
 
