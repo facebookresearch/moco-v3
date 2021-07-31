@@ -29,7 +29,7 @@ class VisionTransformerMoCo(VisionTransformer):
         # Use 2D sin-cos position embedding
         self.build_2d_sincos_position_embedding()
 
-        # Other initialization
+        # Other initializations
         for name, m in self.named_modules():
             if isinstance(m, nn.Linear):
                 if 'qkv' in name:
@@ -119,7 +119,6 @@ def vit_small(**kwargs):
         norm_layer=partial(nn.LayerNorm, eps=1e-6), **kwargs)
     model.default_cfg = _cfg()
     return model
-
 
 def vit_base(**kwargs):
     model = VisionTransformerMoCo(
