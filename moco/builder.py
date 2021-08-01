@@ -13,7 +13,7 @@ class MoCo(nn.Module):
     Build a MoCo model with: a base encoder, a momentum encoder
     https://arxiv.org/abs/1911.05722
     """
-    def __init__(self, base_encoder, with_vit, dim=256, mlp_dim=4096, T=1.0, no_last_bn=False):
+    def __init__(self, base_encoder, with_vit, dim=256, mlp_dim=4096, T=1.0, last_bn_scaler=False):
         """
         dim: feature dimension (default: 256)
         mlp_dim: hidden dimension in MLPs (default: 4096)
@@ -27,20 +27,21 @@ class MoCo(nn.Module):
         # build encoders
         self.base_encoder = base_encoder(num_classes=mlp_dim)
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
+        last_bn = 'no_bias' if last_bn_scaler else 'no_param'
 
         if with_vit:
-            self._build_projectors_with_vit(base_encoder, dim, mlp_dim)
+            self._build_projectors_with_vit(base_encoder, dim, mlp_dim, last_bn)
+            # build a 2-layer predictor
+            self.predictor = self._build_mlp(2, dim, mlp_dim, dim, last_bn)
         else:
-            self._build_projectors_with_resnet(base_encoder, dim, mlp_dim)
-
-        # build a 2-layer predictor
-        self.predictor = self._build_mlp(2, dim, mlp_dim, dim, not no_last_bn)
+            self._build_projectors_with_resnet(base_encoder, dim, mlp_dim, last_bn)
+            self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
 
         for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
             param_m.data.copy_(param_b.data)  # initialize
             param_m.requires_grad = False  # not update by gradient
 
-    def _build_mlp(self, num_layers, input_dim, mlp_dim, output_dim, last_bn=True):
+    def _build_mlp(self, num_layers, input_dim, mlp_dim, output_dim, last_bn=None):
         mlp = []
         for l in range(num_layers):
             dim1 = input_dim if l == 0 else mlp_dim
@@ -51,28 +52,32 @@ class MoCo(nn.Module):
             if l < num_layers - 1:
                 mlp.append(nn.BatchNorm1d(dim2))
                 mlp.append(nn.ReLU(inplace=True))
-            elif last_bn:
-                # similar to SimCLR: https://github.com/google-research/simclr/blob/master/model_util.py#L157
-                # remove this last BN also works
+            elif last_bn == 'no_bias':
+                # follow SimCLR: https://github.com/google-research/simclr/blob/master/model_util.py#L157
+                bn = nn.BatchNorm1d(dim2, affine=True)
+                nn.init.zeros_(bn.bias)
+                bn.bias.requires_grad = False
+                mlp.append(bn)
+            elif last_bn == 'no_param':
                 mlp.append(nn.BatchNorm1d(dim2, affine=False))
 
         return nn.Sequential(*mlp)
 
-    def _build_projectors_with_resnet(self, base_encoder, dim=256, mlp_dim=4096):
+    def _build_projectors_with_resnet(self, base_encoder, dim=256, mlp_dim=4096, last_bn=None):
         hidden_dim = self.base_encoder.fc.weight.shape[1]
         del self.base_encoder.fc, self.momentum_encoder.fc # remove original fc layer
 
         # build a 2-layer projector
-        self.base_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
-        self.momentum_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
+        self.base_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim, last_bn)
+        self.momentum_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim, last_bn)
 
-    def _build_projectors_with_vit(self, base_encoder, dim=256, mlp_dim=4096):
+    def _build_projectors_with_vit(self, base_encoder, dim=256, mlp_dim=4096, last_bn=None):
         hidden_dim = self.base_encoder.head.weight.shape[1]
         del self.base_encoder.head, self.momentum_encoder.head # remove original fc layer
 
         # build a 3-layer projector
-        self.base_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
-        self.momentum_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
+        self.base_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim, last_bn)
+        self.momentum_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim, last_bn)
 
     @torch.no_grad()
     def _update_momentum_encoder(self, m):

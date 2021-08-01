@@ -110,13 +110,14 @@ parser.add_argument('--moco-dim', default=256, type=int,
 parser.add_argument('--moco-mlp-dim', default=4096, type=int,
                     help='hidden dimension in MLPs (default: 4096)')
 parser.add_argument('--moco-m', default=0.99, type=float,
-                    help='moco (initial) momentum of updating momentum encoder '
-                         'the value will gradually increase to 1 with a '
-                         'half-cycle cosine schedule (default: 0.99)')
+                    help='moco momentum of updating momentum encoder (default: 0.99)')
+parser.add_argument('--moco-m-cos', action='store_true',
+                    help='gradually increase moco momentum to 1 with a '
+                         'half-cycle cosine schedule')
 parser.add_argument('--moco-t', default=1.0, type=float,
                     help='softmax temperature (default: 1.0)')
-parser.add_argument('--no-last-bn', action='store_true',
-                    help='whether to not have the last BN in the predictor')
+parser.add_argument('--last-bn-scaler', action='store_true',
+                    help='whether to have scaler (gamma) for last BNs')
 
 # vit specific configs:
 parser.add_argument('--stop-grad-conv1', action='store_true',
@@ -204,12 +205,12 @@ def main_worker(gpu, ngpus_per_node, args):
         model = moco.builder.MoCo(
             partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1),
             True, # with vit setup
-            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.no_last_bn)
+            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.last_bn_scaler)
     else:
         model = moco.builder.MoCo(
             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True), 
             False, # with resnet setup
-            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.no_last_bn)
+            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.last_bn_scaler)
 
     # infer learning rate before changing batch size
     init_lr = args.lr * args.batch_size / 256
@@ -389,7 +390,7 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
     model.train()
 
     end = time.time()
-    moco_m = adjust_moco_momentum(epoch, args)
+    moco_m = adjust_moco_momentum(epoch, args) if args.moco_m_cos else args.moco_m
     for i, (images, _) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
