@@ -116,8 +116,6 @@ parser.add_argument('--moco-m-cos', action='store_true',
                          'half-cycle cosine schedule')
 parser.add_argument('--moco-t', default=1.0, type=float,
                     help='softmax temperature (default: 1.0)')
-parser.add_argument('--last-bn-scaler', action='store_true',
-                    help='whether to have scaler (gamma) for last BNs')
 
 # vit specific configs:
 parser.add_argument('--stop-grad-conv1', action='store_true',
@@ -135,6 +133,8 @@ parser.add_argument('--checkpoint-folder', default='.', type=str, metavar='PATH'
                     help='path to save the checkpoints (default: .)')
 parser.add_argument('--byol-crop', action='store_true',
                     help='whether to use byol random crop')
+parser.add_argument('--crop-min', default=0.2, type=float,
+                    help='minimum scale for random cropping (default: 0.2)')
 # ===== to delete =====
 
 def main():
@@ -205,12 +205,12 @@ def main_worker(gpu, ngpus_per_node, args):
         model = moco.builder.MoCo(
             partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1),
             True, # with vit setup
-            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.last_bn_scaler)
+            args.moco_dim, args.moco_mlp_dim, args.moco_t)
     else:
         model = moco.builder.MoCo(
             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True), 
             False, # with resnet setup
-            args.moco_dim, args.moco_mlp_dim, args.moco_t, args.last_bn_scaler)
+            args.moco_dim, args.moco_mlp_dim, args.moco_t)
 
     # infer learning rate before changing batch size
     init_lr = args.lr * args.batch_size / 256
@@ -312,9 +312,9 @@ def main_worker(gpu, ngpus_per_node, args):
     # BYOL's augmentation recipe: https://arxiv.org/abs/2006.07733
     # except min-scale kept as 0.2
     if args.byol_crop:
-        random_crop = moco.loader.RandomResizedCropBYOL(224, scale=(0.2, 1.))
+        random_crop = moco.loader.RandomResizedCropBYOL(224, scale=(args.crop_min, 1.))
     else:
-        random_crop = transforms.RandomResizedCrop(224, scale=(0.2, 1.))
+        random_crop = transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.))
     augmentation1 = [
         random_crop,
         transforms.RandomApply([
