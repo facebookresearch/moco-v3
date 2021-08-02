@@ -10,10 +10,10 @@ import torch.nn as nn
 
 class MoCo(nn.Module):
     """
-    Build a MoCo model with: a base encoder, a momentum encoder
+    Build a MoCo model with a base encoder, a momentum encoder, and two MLPs
     https://arxiv.org/abs/1911.05722
     """
-    def __init__(self, base_encoder, with_vit, dim=256, mlp_dim=4096, T=1.0):
+    def __init__(self, base_encoder, dim=256, mlp_dim=4096, T=1.0):
         """
         dim: feature dimension (default: 256)
         mlp_dim: hidden dimension in MLPs (default: 4096)
@@ -28,10 +28,7 @@ class MoCo(nn.Module):
         self.base_encoder = base_encoder(num_classes=mlp_dim)
         self.momentum_encoder = base_encoder(num_classes=mlp_dim)
 
-        if with_vit:
-            self._build_projectors_with_vit(base_encoder, dim, mlp_dim)
-        else:
-            self._build_projectors_with_resnet(base_encoder, dim, mlp_dim)
+        self._build_projector_and_predictor_mlps(dim, mlp_dim)
 
         for param_b, param_m in zip(self.base_encoder.parameters(), self.momentum_encoder.parameters()):
             param_m.data.copy_(param_b.data)  # initialize
@@ -50,27 +47,13 @@ class MoCo(nn.Module):
                 mlp.append(nn.ReLU(inplace=True))
             elif last_bn:
                 # follow SimCLR: https://github.com/google-research/simclr/blob/master/model_util.py#L157
+                # for simplicity, we further removed gamma in BN
                 mlp.append(nn.BatchNorm1d(dim2, affine=False))
 
         return nn.Sequential(*mlp)
 
-    def _build_projectors_with_resnet(self, base_encoder, dim, mlp_dim):
-        hidden_dim = self.base_encoder.fc.weight.shape[1]
-        del self.base_encoder.fc, self.momentum_encoder.fc # remove original fc layer
-
-        self.base_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
-        self.momentum_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
-
-        self.predictor = self._build_mlp(2, dim, mlp_dim, dim, False)
-
-    def _build_projectors_with_vit(self, base_encoder, dim=256, mlp_dim=4096):
-        hidden_dim = self.base_encoder.head.weight.shape[1]
-        del self.base_encoder.head, self.momentum_encoder.head # remove original fc layer
-
-        self.base_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
-        self.momentum_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
-
-        self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
+    def _build_projector_and_predictor_mlps(self, dim, mlp_dim):
+        pass
 
     @torch.no_grad()
     def _update_momentum_encoder(self, m):
@@ -112,6 +95,33 @@ class MoCo(nn.Module):
             k2 = self.momentum_encoder(x2)
 
         return self.contrastive_loss(q1, k2) + self.contrastive_loss(q2, k1)
+
+
+class MoCo_ResNet(MoCo):
+    def _build_projector_and_predictor_mlps(self, dim, mlp_dim):
+        hidden_dim = self.base_encoder.fc.weight.shape[1]
+        del self.base_encoder.fc, self.momentum_encoder.fc # remove original fc layer
+
+        # projectors
+        self.base_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
+        self.momentum_encoder.fc = self._build_mlp(2, hidden_dim, mlp_dim, dim)
+
+        # predictor
+        self.predictor = self._build_mlp(2, dim, mlp_dim, dim, False)
+
+
+class MoCo_ViT(MoCo):
+    def _build_projector_and_predictor_mlps(self, base_encoder, dim=256, mlp_dim=4096):
+        hidden_dim = self.base_encoder.head.weight.shape[1]
+        del self.base_encoder.head, self.momentum_encoder.head # remove original fc layer
+
+        # projectors
+        self.base_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
+        self.momentum_encoder.head = self._build_mlp(3, hidden_dim, mlp_dim, dim)
+
+        # predictor
+        self.predictor = self._build_mlp(2, dim, mlp_dim, dim)
+
 
 # utils
 @torch.no_grad()

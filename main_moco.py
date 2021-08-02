@@ -202,14 +202,12 @@ def main_worker(gpu, ngpus_per_node, args):
     # create model
     print("=> creating model '{}'".format(args.arch))
     if args.arch.startswith('vit'):
-        model = moco.builder.MoCo(
+        model = moco.builder.MoCo_ViT(
             partial(vits.__dict__[args.arch], stop_grad_conv1=args.stop_grad_conv1),
-            True, # with vit setup
             args.moco_dim, args.moco_mlp_dim, args.moco_t)
     else:
-        model = moco.builder.MoCo(
+        model = moco.builder.MoCo_ResNet(
             partial(torchvision_models.__dict__[args.arch], zero_init_residual=True), 
-            False, # with resnet setup
             args.moco_dim, args.moco_mlp_dim, args.moco_t)
 
     # infer learning rate before changing batch size
