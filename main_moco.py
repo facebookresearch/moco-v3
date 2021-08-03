@@ -131,8 +131,6 @@ parser.add_argument('--warmup-epochs', default=10, type=int, metavar='N',
 # ===== to delete =====
 parser.add_argument('--checkpoint-folder', default='.', type=str, metavar='PATH',
                     help='path to save the checkpoints (default: .)')
-parser.add_argument('--byol-crop', action='store_true',
-                    help='whether to use byol random crop')
 parser.add_argument('--crop-min', default=0.2, type=float,
                     help='minimum scale for random cropping (default: 0.2)')
 # ===== to delete =====
@@ -308,13 +306,8 @@ def main_worker(gpu, ngpus_per_node, args):
                                      std=[0.229, 0.224, 0.225])
 
     # BYOL's augmentation recipe: https://arxiv.org/abs/2006.07733
-    # except min-scale kept as 0.2
-    if args.byol_crop:
-        random_crop = moco.loader.RandomResizedCropBYOL(224, scale=(args.crop_min, 1.))
-    else:
-        random_crop = transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.))
     augmentation1 = [
-        random_crop,
+        transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)),
         transforms.RandomApply([
             transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
         ], p=0.8),
@@ -326,7 +319,7 @@ def main_worker(gpu, ngpus_per_node, args):
     ]
 
     augmentation2 = [
-        random_crop,
+        transforms.RandomResizedCrop(224, scale=(args.crop_min, 1.)),
         transforms.RandomApply([
             transforms.ColorJitter(0.4, 0.4, 0.2, 0.1)  # not strengthened
         ], p=0.8),
