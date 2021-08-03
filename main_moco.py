@@ -1,4 +1,5 @@
 #!/usr/bin/env python
+
 # Copyright (c) Facebook, Inc. and its affiliates.
 # All rights reserved.
 
@@ -56,7 +57,7 @@ torchvision_model_names = sorted(name for name in torchvision_models.__dict__
 
 model_names = ['vit_small', 'vit_base', 'vit_conv_small', 'vit_conv_base'] + torchvision_model_names
 
-parser = argparse.ArgumentParser(description='PyTorch ImageNet Training')
+parser = argparse.ArgumentParser(description='MoCo ImageNet Pre-Training')
 parser.add_argument('data', metavar='DIR',
                     help='path to dataset')
 parser.add_argument('-a', '--arch', metavar='ARCH', default='resnet50',

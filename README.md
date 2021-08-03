@@ -53,9 +53,9 @@ With a batch size of 1024, ViT-Small fits into a single node of 8 Volta 32G GPUs
 ```
 python main_moco.py \
   -a vit_small -b 1024 \
-  --optimizer=adamw --lr=1e-4 --weight-decay=.1 \
+  --optimizer=adamw --lr=1.5e-4 --weight-decay=.1 \
   --epochs=300 --warmup-epochs=40 \
-  --moco-t=.2 \
+  --stop-grad-conv1 --moco-t=.2 \
   --dist-url 'tcp://localhost:10001' \
   --multiprocessing-distributed --world-size 1 --rank 0 \
   [your imagenet-folder with train and val folders]
@@ -73,9 +73,9 @@ With a batch size of 1024, ViT-Base can be trained on 2 nodes:
 ```
 python main_moco.py \
   -a vit_small -b 1024 \
-  --optimizer=adamw --lr=1e-4 --weight-decay=.1 \
+  --optimizer=adamw --lr=1.5e-4 --weight-decay=.1 \
   --epochs=300 --warmup-epochs=40 \
-  --moco-t=.2 \
+  --stop-grad-conv1 --moco-t=.2 \
   --dist-url 'tcp://[your node 1 address]:[specified port]'' \
   --multiprocessing-distributed --world-size 2 --rank 0 \
   [your imagenet-folder with train and val folders]

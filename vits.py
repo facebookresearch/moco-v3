@@ -22,7 +22,6 @@ __all__ = [
 ]
 
 
-
 class VisionTransformerMoCo(VisionTransformer):
     def __init__(self, stop_grad_conv1=False, **kwargs):
         super().__init__(**kwargs)
