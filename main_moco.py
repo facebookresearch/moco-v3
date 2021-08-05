@@ -14,6 +14,7 @@ import random
 import shutil
 import time
 import warnings
+from functools import partial
 
 # ===== to delete =====
 import signal
@@ -33,12 +34,11 @@ import torchvision.transforms as transforms
 import torchvision.datasets as datasets
 import torchvision.models as torchvision_models
 
-from functools import partial
-import vits
-
 import moco.builder
 import moco.loader
 import moco.optimizer
+
+import vits
 
 # ===== to delete =====
 def signalHandler(a, b):
@@ -212,7 +212,7 @@ def main_worker(gpu, ngpus_per_node, args):
             args.moco_dim, args.moco_mlp_dim, args.moco_t)
 
     # infer learning rate before changing batch size
-    init_lr = args.lr * args.batch_size / 256
+    args.lr = args.lr * args.batch_size / 256
 
     if not torch.cuda.is_available():
         print('using CPU, this will be slow')
@@ -247,11 +247,11 @@ def main_worker(gpu, ngpus_per_node, args):
     print(model) # print model after SyncBatchNorm
 
     if args.optimizer == 'lars':
-        optimizer = moco.optimizer.LARS(model.parameters(), init_lr,
+        optimizer = moco.optimizer.LARS(model.parameters(), args.lr,
                                         weight_decay=args.weight_decay,
                                         momentum=args.momentum)
     elif args.optimizer == 'adamw':
-        optimizer = torch.optim.AdamW(model.parameters(), init_lr,
+        optimizer = torch.optim.AdamW(model.parameters(), args.lr,
                                 weight_decay=args.weight_decay)
         
     scaler = torch.cuda.amp.GradScaler()
@@ -352,7 +352,6 @@ def main_worker(gpu, ngpus_per_node, args):
     for epoch in range(args.start_epoch, args.epochs):
         if args.distributed:
             train_sampler.set_epoch(epoch)
-        adjust_learning_rate(optimizer, init_lr, epoch, args)
 
         # train for one epoch
         train(train_loader, model, optimizer, scaler, summary_writer, epoch, args)
@@ -375,20 +374,28 @@ def main_worker(gpu, ngpus_per_node, args):
 def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
     batch_time = AverageMeter('Time', ':6.3f')
     data_time = AverageMeter('Data', ':6.3f')
+    learning_rates = AverageMeter('LR', ':.4e')
     losses = AverageMeter('Loss', ':.4e')
     progress = ProgressMeter(
         len(train_loader),
-        [batch_time, data_time, losses],
+        [batch_time, data_time, learning_rates, losses],
         prefix="Epoch: [{}]".format(epoch))
 
     # switch to train mode
     model.train()
 
     end = time.time()
-    moco_m = adjust_moco_momentum(epoch, args) if args.moco_m_cos else args.moco_m
+    iters_per_epoch = len(train_loader)
+    moco_m = args.moco_m
     for i, (images, _) in enumerate(train_loader):
         # measure data loading time
         data_time.update(time.time() - end)
+
+        # adjust learning rate and momentum coefficient per iteration
+        lr = adjust_learning_rate(optimizer, epoch + i / iters_per_epoch, args)
+        learning_rates.update(lr)
+        if args.moco_m_cos:
+            moco_m = adjust_moco_momentum(epoch + i / iters_per_epoch, args)
 
         if args.gpu is not None:
             images[0] = images[0].cuda(args.gpu, non_blocking=True)
@@ -401,7 +408,7 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
         losses.update(loss.item(), images[0].size(0))
         # ===== to delete =====
         if args.rank == 0:
-            summary_writer.add_scalar("loss", loss.item(), epoch * len(train_loader) + i)
+            summary_writer.add_scalar("loss", loss.item(), epoch * iters_per_epoch + i)
         # ===== to delete =====
 
         # compute gradient and do SGD step
@@ -465,21 +472,20 @@ class ProgressMeter(object):
         return '[' + fmt + '/' + fmt.format(num_batches) + ']'
 
 
-def adjust_learning_rate(optimizer, init_lr, epoch, args):
+def adjust_learning_rate(optimizer, epoch, args):
     """Decays the learning rate with half-cycle cosine after warmup"""
     if epoch < args.warmup_epochs:
-        lr = init_lr / (args.warmup_epochs + 1) * (epoch + 1)
+        lr = args.lr * epoch / args.warmup_epochs 
     else:
-        lr = init_lr * 0.5 * (1. + math.cos(math.pi * (epoch - args.warmup_epochs) / (args.epochs - args.warmup_epochs)))
-    print('Learning rate at epoch {:05d}: {:.5e}'.format(epoch, lr))
+        lr = args.lr * 0.5 * (1. + math.cos(math.pi * (epoch - args.warmup_epochs) / (args.epochs - args.warmup_epochs)))
     for param_group in optimizer.param_groups:
         param_group['lr'] = lr
+    return lr
 
 
 def adjust_moco_momentum(epoch, args):
     """Adjust moco momentum based on current epoch"""
     m = 1. - 0.5 * (1. + math.cos(math.pi * epoch / args.epochs)) * (1. - args.moco_m)
-    print('Momentum coefficient at epoch {:05d}: {:.5e}'.format(epoch, m))
     return m
 
 
