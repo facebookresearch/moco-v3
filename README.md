@@ -32,6 +32,7 @@ This is the *default* setting for most hyper-parameters. With a batch size of 40
 On the first node, run:
 ```
 python main_moco.py \
+  --moco-m-cos \
   --dist-url 'tcp://[your node 1 address]:[specified port]'' \
   --multiprocessing-distributed --world-size 2 --rank 0 \
   [your imagenet-folder with train and val folders]
@@ -100,7 +101,19 @@ python main_lincls.py \
 ```
 </details>
 
-### Reference Setups
+### End-to-End Classification
+
+To perform end-to-end fine-tuning for ImageNet classification, first convert the pre-trained checkpoints to [DEiT](https://github.com/facebookresearch/deit) format:
+```
+python convert_to_deit.py \
+  --input [your checkpoint path]/[your checkpoint file].pth.tar \
+  --output [target checkpoint file].pth
+```
+Then use `[target checkpoint file].pth` to initialize weights in DEiT.
+
+With 100-epoch fine-tuning, the reference top-1 classification accuracy is 82.8%. With 300-epoch, the accuracy is 83.2%.
+
+### Reference Setups and Models
 
 For longer pre-trainings with ResNet-50, we find the following hyper-parameters work well (expected performance in the last column, will update logs/pre-trained models soon):
 
@@ -111,27 +124,31 @@ For longer pre-trainings with ResNet-50, we find the following hyper-parameters 
 <th valign="bottom">learning<br/>rate</th>
 <th valign="bottom">weight<br/>decay</th>
 <th valign="bottom">momentum<br/>update</th>
+<th valign="bottom">momentum<br/>schedule</th>
 <th valign="center">top-1 acc.</th>
 <!-- TABLE BODY -->
 <tr>
 <td align="center">100</td>
-<td align="center">0.45</td>
+<td align="center">0.6</td>
 <td align="center">1e-6</td>
 <td align="center">0.99</td>
-<td align="center">67.4</td>
+<td align="center">cosine</td>
+<td align="center">69.0</td>
 </tr>
 <tr>
 <td align="center">300</td>
 <td align="center">0.3</td>
 <td align="center">1e-6</td>
 <td align="center">0.99</td>
-<td align="center">[TODO]72.8</td>
+<td align="center">cosine</td>
+<td align="center">73.0</td>
 </tr>
 <tr>
 <td align="center">1000</td>
 <td align="center">0.3</td>
 <td align="center">1.5e-6</td>
 <td align="center">0.996</td>
+<td align="center">cosine</td>
 <td align="center">[TODO]74.8</td>
 </tr>
 </tbody></table>
@@ -144,7 +161,8 @@ These hyper-parameters can be set with respective arguments. For example:
 On the first node, run:
 ```
 python main_moco.py \
-  --moco-m=0.996 --lr=.3 --wd=1.5e-6 --epochs=1000 \
+  --lr=.3 --wd=1.5e-6 --epochs=1000 \
+  --moco-m=0.996 --moco-m-cos \
   --dist-url "tcp://[your node 1 address]:[specified port]" \
   --multiprocessing-distributed --world-size 2 --rank 0 \
   [your imagenet-folder with train and val folders]
