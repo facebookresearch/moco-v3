@@ -40,6 +40,7 @@ python main_moco.py \
 On the second node, run:
 ```
 python main_moco.py \
+  --moco-m-cos \
   --dist-url 'tcp://[your node 1 address]:[specified port]' \
   --multiprocessing-distributed --world-size 2 --rank 1 \
   [your imagenet-folder with train and val folders]
