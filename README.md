@@ -22,7 +22,7 @@ The code has been tested with CUDA 10.2/CuDNN 7.6.5, PyTorch 1.9.0 and timm 0.4.
 
 Similar to MoCo, only **multi-gpu**, **DistributedDataParallel** training is supported; single-gpu or DataParallel training is not supported. In addition, the code is improved to better suit the **multi-node** setting, and by default uses automatic **mixed-precision** for pre-training.
 
-Below we list some MoCo v3 pre-training commands as examples. They cover different model architectures, training epochs, single-/multi-node training, etc. 
+Below we list some MoCo v3 pre-training commands as examples. They cover different architectures, training epochs, single-/multi-node training, etc. 
 
 <details>
 <summary>ResNet-50, 100-Epoch, 2-Node.</summary>
@@ -63,27 +63,7 @@ python main_moco.py \
   [your imagenet-folder with train and val folders]
 ```
 
-Note that the smaller batch size: 1) facilitates stable training, as discussed in the [paper](https://arxiv.org/abs/2104.02057); and 2) cuts inter-node communication cost with single node training. Therefore, we highly recommend this setting for ViT-based explorations.
-
-</details>
-
-<details>
-<summary>ViT-Base, 300-Epoch, 2-Node.</summary>
-
-With a batch size of 1024, ViT-Base can be trained on 2 nodes:
-
-```
-python main_moco.py \
-  -a vit_small -b 1024 \
-  --optimizer=adamw --lr=1.5e-4 --weight-decay=.1 \
-  --epochs=300 --warmup-epochs=40 \
-  --stop-grad-conv1 --moco-t=.2 \
-  --dist-url 'tcp://[your node 1 address]:[specified port]'' \
-  --multiprocessing-distributed --world-size 2 --rank 0 \
-  [your imagenet-folder with train and val folders]
-```
-On the second node, run the same command as above, with `--rank 1`.
-</details>
+Note that the smaller batch size: 1) facilitates stable training, as discussed in the [paper](https://arxiv.org/abs/2104.02057); and 2) cuts inter-node communication cost with single node training. Therefore, we recommend this setting for ViT-based explorations.
 
 ### Linear Classification
 
@@ -94,7 +74,7 @@ By default, we use SGD+Momentum optimizer and a batch size of 1024 for linear cl
 
 ```
 python main_lincls.py \
-  -a [architecture] \
+  -a [architecture] --lr [learning rate] \
   --dist-url 'tcp://localhost:10001' \
   --multiprocessing-distributed --world-size 1 --rank 0 \
   --pretrained [your checkpoint path]/[your checkpoint file].pth.tar \
@@ -116,16 +96,17 @@ With 100-epoch fine-tuning, the reference top-1 classification accuracy is 82.8%
 
 ### Reference Setups and Models
 
-For longer pre-trainings with ResNet-50, we find the following hyper-parameters work well (expected performance in the last column, will update logs/pre-trained models soon):
+For longer pre-trainings with ResNet-50, we find the following hyper-parameters work well (expected performance in the last column):
 
 <table><tbody>
 <!-- START TABLE -->
 <!-- TABLE HEADER -->
-<th valign="center">epochs<br/></th>
+<th valign="center">epochs</th>
 <th valign="bottom">learning<br/>rate</th>
 <th valign="bottom">weight<br/>decay</th>
 <th valign="bottom">momentum<br/>update</th>
 <th valign="bottom">momentum<br/>schedule</th>
+<th valign="bottom">crop<br/>min-scale</th>
 <th valign="center">top-1 acc.</th>
 <!-- TABLE BODY -->
 <tr>
@@ -134,6 +115,7 @@ For longer pre-trainings with ResNet-50, we find the following hyper-parameters 
 <td align="center">1e-6</td>
 <td align="center">0.99</td>
 <td align="center">cosine</td>
+<td align="center">0.2</td>
 <td align="center">69.0</td>
 </tr>
 <tr>
@@ -142,6 +124,7 @@ For longer pre-trainings with ResNet-50, we find the following hyper-parameters 
 <td align="center">1e-6</td>
 <td align="center">0.99</td>
 <td align="center">cosine</td>
+<td align="center">0.2</td>
 <td align="center">73.0</td>
 </tr>
 <tr>
@@ -150,6 +133,7 @@ For longer pre-trainings with ResNet-50, we find the following hyper-parameters 
 <td align="center">1.5e-6</td>
 <td align="center">0.996</td>
 <td align="center">cosine</td>
+<td align="center">0.2</td>
 <td align="center">[TODO]74.8</td>
 </tr>
 </tbody></table>
@@ -170,6 +154,61 @@ python main_moco.py \
 ```
 On the second node, run the same command as above, with `--rank 1`.
 </details>
+
+For ViT, we find the following hyper-parameters work well (different from ResNet-50):
+
+<table><tbody>
+<!-- START TABLE -->
+<!-- TABLE HEADER -->
+<th valign="bottom">model<br/>size</th>
+<th valign="center">optimizer</th>
+<th valign="bottom">learning<br/>rate</th>
+<th valign="bottom">weight<br/>decay</th>
+<th valign="bottom">warmup<br/>epochs</th>
+<th valign="center">temperature</th>
+<th valign="center">top-1 acc.</th>
+<!-- TABLE BODY -->
+<tr>
+<td align="center">ViT-Small</td>
+<td align="center">AdamW</td>
+<td align="center">1.5e-4</td>
+<td align="center">0.1</td>
+<td align="center">40</td>
+<td align="center">0.2</td>
+<td align="center">[TODO]73.1</td>
+</tr>
+<tr>
+<td align="center">ViT-Base</td>
+<td align="center">AdamW</td>
+<td align="center">1.5e-4</td>
+<td align="center">0.1</td>
+<td align="center">40</td>
+<td align="center">0.2</td>
+<td align="center">76.7</td>
+</tr>
+</tbody></table>
+
+And for large batch size training, it is especially important to set `--stop-grad-conv1` so the first layer is a fixed random patch projection. For example:
+
+</details>
+
+<details>
+<summary>ViT-Base, 300-Epoch, 8-Node.</summary>
+
+With a batch size of 4096, ViT-Base can be trained on 8 nodes:
+
+```
+python main_moco.py \
+  -a vit_base \
+  --optimizer=adamw --lr=1.5e-4 --weight-decay=.1 \
+  --epochs=300 --warmup-epochs=40 \
+  --stop-grad-conv1 --moco-t=.2 \
+  --dist-url 'tcp://[your node 1 address]:[specified port]'' \
+  --multiprocessing-distributed --world-size 8 --rank 0 \
+  [your imagenet-folder with train and val folders]
+```
+On the other nodes, run the same command as above, with `--rank [r]` where `n` ranges from `1` to `7`.
+</details> 
 
 ### License
 
