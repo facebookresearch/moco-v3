@@ -62,6 +62,7 @@ python main_moco.py \
   --multiprocessing-distributed --world-size 1 --rank 0 \
   [your imagenet-folder with train and val folders]
 ```
+</details>
 
 Note that the smaller batch size: 1) facilitates stable training, as discussed in the [paper](https://arxiv.org/abs/2104.02057); and 2) cuts inter-node communication cost with single node training. Therefore, we recommend this setting for ViT-based explorations.
 
@@ -189,8 +190,6 @@ For ViT, we find the following hyper-parameters work well (different from ResNet
 </tbody></table>
 
 And for large batch size training, it is especially important to set `--stop-grad-conv1` so the first layer is a fixed random patch projection. For example:
-
-</details>
 
 <details>
 <summary>ViT-Base, 300-Epoch, 8-Node.</summary>
