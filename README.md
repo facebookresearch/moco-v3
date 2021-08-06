@@ -206,7 +206,7 @@ python main_moco.py \
   --multiprocessing-distributed --world-size 8 --rank 0 \
   [your imagenet-folder with train and val folders]
 ```
-On the other nodes, run the same command as above, with `--rank [r]` where `n` ranges from `1` to `7`.
+On the other nodes, run the same command as above, with `--rank [r]` where `[r]` ranges from integers `1` to `7`.
 </details> 
 
 ### License
