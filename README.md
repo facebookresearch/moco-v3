@@ -32,7 +32,7 @@ This is the *default* setting for most hyper-parameters. With a batch size of 40
 On the first node, run:
 ```
 python main_moco.py \
-  --moco-m-cos \
+  --moco-m-cos --crop-min=.2 \
   --dist-url 'tcp://[your node 1 address]:[specified port]'' \
   --multiprocessing-distributed --world-size 2 --rank 0 \
   [your imagenet-folder with train and val folders]
@@ -40,7 +40,7 @@ python main_moco.py \
 On the second node, run:
 ```
 python main_moco.py \
-  --moco-m-cos \
+  --moco-m-cos --crop-min=.2 \
   --dist-url 'tcp://[your node 1 address]:[specified port]' \
   --multiprocessing-distributed --world-size 2 --rank 1 \
   [your imagenet-folder with train and val folders]
@@ -163,7 +163,7 @@ On the first node, run:
 ```
 python main_moco.py \
   --lr=.3 --wd=1.5e-6 --epochs=1000 \
-  --moco-m=0.996 --moco-m-cos \
+  --moco-m=0.996 --moco-m-cos --crop-min=.2 \
   --dist-url "tcp://[your node 1 address]:[specified port]" \
   --multiprocessing-distributed --world-size 2 --rank 0 \
   [your imagenet-folder with train and val folders]
