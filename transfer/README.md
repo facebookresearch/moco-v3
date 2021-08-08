@@ -6,37 +6,42 @@ This folder includes the transfer learning experiments on CIFAR-10, CIFAR-100, F
 
 The following results are based on ImageNet-1k self-supervised pre-training, followed by end-to-end fine-tuning on downstream datasets. All results are based on a batch size of 128 and 100 training epochs.
 
-#### ViT, transfer learning
+#### ViT-Base, transfer learning
 <table><tbody>
 <!-- START TABLE -->
 <!-- TABLE HEADER -->
 <th valign="center">dataset</th>
 <th valign="center">pretrain<br/>epochs</th>
 <th valign="center">pretrain<br/>crops</th>
+<th valign="center">finetune<br/>epochs</th>
 <th valign="center">e2e<br/>acc</th>
 <!-- TABLE BODY -->
 <tr>
 <td align="left">CIFAR-10</td>
 <td align="right">300</td>
 <td align="center">2x224</td>
+<td align="right">100</td>
 <td align="center">98.9%</td>
 </tr>
 <tr>
 <td align="left">CIFAR-100</td>
 <td align="right">300</td>
 <td align="center">2x224</td>
+<td align="right">100</td>
 <td align="center">90.5%</td>
 </tr>
 <tr>
 <td align="left">Flowers</td>
 <td align="right">300</td>
 <td align="center">2x224</td>
+<td align="right">100</td>
 <td align="center">97.7%</td>
 </tr>
 <tr>
 <td align="left">Pets</td>
 <td align="right">300</td>
 <td align="center">2x224</td>
+<td align="right">100</td>
 <td align="center">93.2%</td>
 </tr>
 </tbody></table>
