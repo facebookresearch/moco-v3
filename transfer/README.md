@@ -1,4 +1,4 @@
-## MoCo v3 for Self-supervised ResNet and ViT
+## MoCo v3 Transfer Learning with ViT
 
 This folder includes the transfer learning experiments on CIFAR-10, CIFAR-100, Flowers and Pets datasets. We provide finetuning recipes for the ViT-Base model.
 
@@ -14,7 +14,7 @@ The following results are based on ImageNet-1k self-supervised pre-training, fol
 <th valign="center">pretrain<br/>epochs</th>
 <th valign="center">pretrain<br/>crops</th>
 <th valign="center">finetune<br/>epochs</th>
-<th valign="center">e2e<br/>acc</th>
+<th valign="center">transfer<br/>acc</th>
 <!-- TABLE BODY -->
 <tr>
 <td align="left">CIFAR-10</td>
@@ -46,9 +46,9 @@ The following results are based on ImageNet-1k self-supervised pre-training, fol
 </tr>
 </tbody></table>
 
-Similar to the end-to-end fine-tuning on ImageNet, the transfer learning results are also obtained using the [DeiT](https://github.com/facebookresearch/deit) repo. 
+Similar to the end-to-end fine-tuning experiment on ImageNet, the transfer learning results are also obtained using the [DeiT](https://github.com/facebookresearch/deit) repo, with the default model [deit_base_patch16_224]. 
 
-### Usage: Transfer learning with ViT
+### Preparation: Transfer learning with ViT
 
 To perform transfer learning for ViT, use our script to convert the pre-trained ViT checkpoint to [DEiT](https://github.com/facebookresearch/deit) format:
 ```
@@ -56,32 +56,30 @@ python convert_to_deit.py \
   --input [your checkpoint path]/[your checkpoint file].pth.tar \
   --output [target checkpoint file].pth
 ```
-Then run the training (in the DeiT repo) with the converted checkpoint:
-
-1. copy (or replace) the following files to the DeiT folder: 
+Then copy (or replace) the following files to the DeiT folder: 
 ```
 datasets.py
 oxford_flowers_dataset.py
 oxford_pets_dataset.py 
 ```
 
-1. download and prepare the datasets
+#### Download and prepare the datasets
 
-Pets [Homepage](https://www.robots.ox.ac.uk/~vgg/data/pets/)
+Pets [\[Homepage\]](https://www.robots.ox.ac.uk/~vgg/data/pets/)
 ```
-.
-└── ./pets/
-    ├── ./pets/annotations/               # split and label files
-    └── ./pets/images/                    # data images
+./data/
+└── ./data/pets/
+    ├── ./data/pets/annotations/               # split and label files
+    └── ./data/pets/images/                    # data images
 ```
 
-Flowers [Homepage](https://www.robots.ox.ac.uk/~vgg/data/flowers/102/)
+Flowers [\[Homepage\]](https://www.robots.ox.ac.uk/~vgg/data/flowers/102/)
 ```
-.
-└── ./flowers/
-    ├── ./flowers/jpg/               # jpg images
-    ├── ./flowers/setid.mat          # dataset split   
-    └── ./flowers/imagelabels.mat    # labels   
+./data/
+└── ./data/flowers/
+    ├── ./data/flowers/jpg/               # jpg images
+    ├── ./data/flowers/setid.mat          # dataset split   
+    └── ./data/flowers/imagelabels.mat    # labels   
 ```
 
 
@@ -95,6 +93,7 @@ CIFAR-10/CIFAR-100 datasets will be downloaded automatically.
 python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
     --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.1 --eval-freq 10 \
     --no-pin-mem  --warmup-epochs 3 --data-set cifar10 --data-path [cifar-10 data path]  --no-repeated-aug \
+    --resume [your pretrain checkpoint file] \
     --reprob 0.0 --drop-path 0.1 --mixup 0.8 --cutmix 1
 ```
 
@@ -103,6 +102,7 @@ python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
 python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
     --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.1 --eval-freq 10 \
     --no-pin-mem  --warmup-epochs 3 --data-set cifar10 --data-path [cifar-100 data path]  --no-repeated-aug \
+    --resume [your pretrain checkpoint file] \
     --reprob 0.0 --drop-path 0.1 --mixup 0.5 --cutmix 1
 ```
 
@@ -111,6 +111,7 @@ python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
 python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
     --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.3 --eval-freq 10 \
     --no-pin-mem  --warmup-epochs 3 --data-set cifar10 --data-path [oxford-flowers data path]  --no-repeated-aug \
+    --resume [your pretrain checkpoint file] \
     --reprob 0.25 --drop-path 0.1 --mixup 0 --cutmix 0
 ```
 
@@ -119,8 +120,9 @@ python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
 python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
     --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.1 --eval-freq 10 \
     --no-pin-mem  --warmup-epochs 3 --data-set cifar10 --data-path [oxford-pets data path]  --no-repeated-aug \
+    --resume [your pretrain checkpoint file] \
     --reprob 0 --drop-path 0 --mixup 0.8 --cutmix 0
 ```
 
 **Note**:
-Similar to ImageNet end-to-end finetuning experiment, We use `--resume` rather than `--finetune` in the DeiT repo, as its `--finetune` option trains under eval mode. When loading the pre-trained model, revise `model_without_ddp.load_state_dict(checkpoint['model'])` with `strict=False`.
+Similar to the ImageNet end-to-end finetuning experiment, we use `--resume` rather than `--finetune` in the DeiT repo, as its `--finetune` option trains under eval mode. When loading the pre-trained model, revise `model_without_ddp.load_state_dict(checkpoint['model'])` with `strict=False`.
