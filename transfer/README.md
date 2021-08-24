@@ -46,7 +46,7 @@ The following results are based on ImageNet-1k self-supervised pre-training, fol
 </tr>
 </tbody></table>
 
-Similar to the end-to-end fine-tuning experiment on ImageNet, the transfer learning results are also obtained using the [DeiT](https://github.com/facebookresearch/deit) repo, with the default model [deit_base_patch16_224]. 
+Similar to the end-to-end fine-tuning experiment on ImageNet, the transfer learning results are also obtained using the [DEiT](https://github.com/facebookresearch/deit) repo, with the default model [deit_base_patch16_224]. 
 
 ### Preparation: Transfer learning with ViT
 

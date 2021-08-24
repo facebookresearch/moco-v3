@@ -115,7 +115,7 @@ parser.add_argument('--optimizer', default='lars', type=str,
 parser.add_argument('--warmup-epochs', default=10, type=int, metavar='N',
                     help='number of warmup epochs')
 parser.add_argument('--crop-min', default=0.08, type=float,
-                    help='minimum scale for random cropping (default: 0.2)')
+                    help='minimum scale for random cropping (default: 0.08)')
 
 
 def main():

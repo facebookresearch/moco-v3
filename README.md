@@ -180,7 +180,7 @@ See the commands listed in [CONFIG.md](https://github.com/facebookresearch/moco-
 
 ### Transfer Learning
 
-See the instruction in the [transfer](https://github.com/facebookresearch/moco-v3/tree/main/transfer) dir.
+See the instructions in the [transfer](https://github.com/facebookresearch/moco-v3/tree/main/transfer) dir.
 
 ### License
 
