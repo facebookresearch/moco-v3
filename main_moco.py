@@ -35,6 +35,7 @@ import moco.loader
 import moco.optimizer
 
 import vits
+from tqdm import tqdm
 
 
 torchvision_model_names = sorted(name for name in torchvision_models.__dict__
@@ -73,6 +74,8 @@ parser.add_argument('-p', '--print-freq', default=10, type=int,
                     metavar='N', help='print frequency (default: 10)')
 parser.add_argument('--resume', default='', type=str, metavar='PATH',
                     help='path to latest checkpoint (default: none)')
+parser.add_argument('--pretrained', default='', type=str, metavar='PATH',
+                    help='path to pretrained checkpoint (default: none) used for finetune')
 parser.add_argument('--world-size', default=-1, type=int,
                     help='number of nodes for distributed training')
 parser.add_argument('--rank', default=-1, type=int,
@@ -85,6 +88,7 @@ parser.add_argument('--seed', default=None, type=int,
                     help='seed for initializing training. ')
 parser.add_argument('--gpu', default=None, type=int,
                     help='GPU id to use.')
+parser.add_argument('--gpus', type=str, default='0')
 parser.add_argument('--multiprocessing-distributed', action='store_true',
                     help='Use multi-processing distributed training to launch '
                          'N processes per node, which has N GPUs. This is the '
@@ -120,6 +124,17 @@ parser.add_argument('--crop-min', default=0.08, type=float,
 
 def main():
     args = parser.parse_args()
+
+    os.environ['CUDA_VISIBLE_DEVICES'] = args.gpus
+    args.save_dir = os.path.join('self-similarity', args.arch)
+    if args.pretrained:
+        args.save_dir = os.path.join(args.save_dir, 'pretrained_from_{}'.format(args.pretrained.split('/')[-1]))
+    args.save_dir = os.path.join(args.save_dir, 'gpus_{}_lr_{}_bs_{}_epochs'.format(len(args.gpus.split(',')),
+                                                                                     args.lr,
+                                                                                     args.batch_size,
+                                                                                     args.epochs))
+    if not os.path.exists(args.save_dir):
+        os.makedirs(args.save_dir)
 
     if args.seed is not None:
         random.seed(args.seed)
@@ -164,6 +179,7 @@ def main_worker(gpu, ngpus_per_node, args):
 
     if args.gpu is not None:
         print("Use GPU: {} for training".format(args.gpu))
+        print("Use GPUs: {} for training".format(args.gpus))
 
     if args.distributed:
         if args.dist_url == "env://" and args.rank == -1:
@@ -298,7 +314,7 @@ def main_worker(gpu, ngpus_per_node, args):
         train_dataset, batch_size=args.batch_size, shuffle=(train_sampler is None),
         num_workers=args.workers, pin_memory=True, sampler=train_sampler, drop_last=True)
 
-    for epoch in range(args.start_epoch, args.epochs):
+    for epoch in tqdm(range(args.start_epoch, args.epochs)):
         if args.distributed:
             train_sampler.set_epoch(epoch)
 
@@ -366,8 +382,8 @@ def train(train_loader, model, optimizer, scaler, summary_writer, epoch, args):
         batch_time.update(time.time() - end)
         end = time.time()
 
-        if i % args.print_freq == 0:
-            progress.display(i)
+        # if i % args.print_freq == 0:
+        #     progress.display(i)
 
 
 def save_checkpoint(state, is_best, filename='checkpoint.pth.tar'):
