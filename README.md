@@ -176,7 +176,7 @@ This gives us 83.2% accuracy for ViT-Base with 150-epoch fine-tuning.
 
 ### Model Configs
 
-See the commands listed in [CONFIG.md](https://github.com/facebookresearch/moco-v3/blob/main/CONFIG.md).
+See the commands listed in [CONFIG.md](https://github.com/facebookresearch/moco-v3/blob/main/CONFIG.md) for specific model configs, including our recommended hyper-parameters and pre-trained reference models.
 
 ### Transfer Learning
 
