@@ -91,7 +91,7 @@ CIFAR-10/CIFAR-100 datasets will be downloaded automatically.
 #### CIFAR-10
 ```
 python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
-    --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.1 --eval-freq 10 \
+    --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.1 \
     --no-pin-mem  --warmup-epochs 3 --data-set cifar10 --data-path [cifar-10 data path]  --no-repeated-aug \
     --resume [your pretrain checkpoint file] \
     --reprob 0.0 --drop-path 0.1 --mixup 0.8 --cutmix 1
@@ -100,7 +100,7 @@ python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
 #### CIFAR-100
 ```
 python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
-    --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.1 --eval-freq 10 \
+    --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.1 \
     --no-pin-mem  --warmup-epochs 3 --data-set cifar100 --data-path [cifar-100 data path]  --no-repeated-aug \
     --resume [your pretrain checkpoint file] \
     --reprob 0.0 --drop-path 0.1 --mixup 0.5 --cutmix 1
@@ -109,7 +109,7 @@ python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
 #### Flowers
 ```
 python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
-    --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.3 --eval-freq 10 \
+    --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.3 \
     --no-pin-mem  --warmup-epochs 3 --data-set flowers --data-path [oxford-flowers data path]  --no-repeated-aug \
     --resume [your pretrain checkpoint file] \
     --reprob 0.25 --drop-path 0.1 --mixup 0 --cutmix 0
@@ -118,7 +118,7 @@ python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
 #### Pets
 ```
 python -u -m torch.distributed.launch --nproc_per_node=8 --use_env main.py \
-    --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.1 --eval-freq 10 \
+    --batch-size 128 --output_dir [your output dir path] --epochs 100 --lr 3e-4 --weight-decay 0.1 \
     --no-pin-mem  --warmup-epochs 3 --data-set pets --data-path [oxford-pets data path]  --no-repeated-aug \
     --resume [your pretrain checkpoint file] \
     --reprob 0 --drop-path 0 --mixup 0.8 --cutmix 0
