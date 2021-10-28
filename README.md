@@ -9,6 +9,8 @@ The original MoCo v3 was implemented in Tensorflow and run in TPUs. This repo re
 
 The following results are based on ImageNet-1k self-supervised pre-training, followed by ImageNet-1k supervised training for linear evaluation or end-to-end fine-tuning. All results in these tables are based on a batch size of 4096.
 
+**Pre-trained models** and **configs** can be found at [CONFIG.md](https://github.com/facebookresearch/moco-v3/blob/main/CONFIG.md).
+
 #### ResNet-50, linear classification
 <table><tbody>
 <!-- START TABLE -->
