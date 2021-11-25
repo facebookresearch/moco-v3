@@ -60,7 +60,7 @@ parser.add_argument('--start-epoch', default=0, type=int, metavar='N',
 parser.add_argument('-b', '--batch-size', default=4096, type=int,
                     metavar='N',
                     help='mini-batch size (default: 4096), this is the total '
-                         'batch size of all GPUs on the current node when '
+                         'batch size of all GPUs on all nodes when '
                          'using Data Parallel or Distributed Data Parallel')
 parser.add_argument('--lr', '--learning-rate', default=0.6, type=float,
                     metavar='LR', help='initial (base) learning rate', dest='lr')
